@@ -1,0 +1,231 @@
+---
+title: Installation
+description: Learn how to install BankScrap and bank-specific adapters for accessing your account data
+---
+
+## Overview
+
+BankScrap uses a modular architecture where you install a specific adapter gem for your bank. The base `bankscrap` gem is automatically installed as a dependency, so you only need to install the adapter for your specific bank.
+
+## Installing Bank Adapters
+
+<Note>
+  You only need to install the gem for your specific bank. The main `bankscrap` gem will be installed automatically as a dependency.
+</Note>
+
+### Using RubyGems
+
+Install the adapter for your bank directly using the `gem install` command:
+
+<CodeGroup>
+
+```bash BBVA
+gem install bankscrap-bbva
+```
+
+```bash ING Direct
+gem install bankscrap-ing
+```
+
+```bash Openbank
+gem install bankscrap-openbank
+```
+
+```bash Sabadell
+gem install bankscrap-sabadell
+```
+
+```bash Arquia Banca
+gem install bankscrap-arquia
+```
+
+```bash Ibercaja
+gem install bankscrap-ibercaja
+```
+
+</CodeGroup>
+
+### Using Bundler
+
+If you're using Bundler in your Ruby project, add the bank adapter to your `Gemfile`:
+
+<CodeGroup>
+
+```ruby BBVA
+# Gemfile
+gem 'bankscrap-bbva'
+```
+
+```ruby ING Direct
+# Gemfile
+gem 'bankscrap-ing'
+```
+
+```ruby Openbank
+# Gemfile
+gem 'bankscrap-openbank'
+```
+
+```ruby Sabadell
+# Gemfile
+gem 'bankscrap-sabadell'
+```
+
+</CodeGroup>
+
+Then run:
+
+```bash
+bundle install
+```
+
+## Installing the Base Gem (Optional)
+
+<Warning>
+  In most cases, you don't need to install the base `bankscrap` gem directly. It's automatically installed when you install a bank adapter.
+</Warning>
+
+If you're developing a new bank adapter or need the base gem for another reason, you can install it directly:
+
+```bash
+gem install bankscrap
+```
+
+Or add it to your `Gemfile`:
+
+```ruby
+gem 'bankscrap'
+```
+
+## System Requirements
+
+### Ruby Version
+
+BankScrap requires Ruby version 2.1 or higher:
+
+```bash
+ruby --version
+# Should output: ruby 2.1.0 or higher
+```
+
+### JavaScript Runtime
+
+<Warning>
+  Some banks require a JavaScript runtime to function properly. If you see an error like "Could not find JavaScript runtime", you need to install Node.js.
+</Warning>
+
+Install Node.js based on your operating system:
+
+<CodeGroup>
+
+```bash macOS (Homebrew)
+brew install node
+```
+
+```bash Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install nodejs
+```
+
+```bash Fedora/RHEL
+sudo dnf install nodejs
+```
+
+```bash Windows (Chocolatey)
+choco install nodejs
+```
+
+</CodeGroup>
+
+Verify Node.js is installed:
+
+```bash
+node --version
+```
+
+## Verifying Installation
+
+After installation, verify that BankScrap is properly installed:
+
+```bash
+bankscrap --version
+```
+
+You can also check if your bank's adapter is available:
+
+```bash
+gem list | grep bankscrap
+```
+
+This should show the `bankscrap` base gem and your installed bank adapter(s).
+
+## Available Bank Adapters
+
+Here's the complete list of available bank adapters:
+
+| Bank | Gem Name | Type |
+|------|----------|------|
+| BBVA | `bankscrap-bbva` | Personal accounts |
+| BBVA Net Cash | `bankscrap-bbva-net-cash` | Business accounts |
+| ING Direct | `bankscrap-ing` | Personal accounts |
+| Arquia Banca | `bankscrap-arquia` | Personal accounts |
+| Openbank | `bankscrap-openbank` | Personal accounts |
+| Sabadell | `bankscrap-sabadell` | Personal accounts |
+| Ibercaja | `bankscrap-ibercaja` | Personal accounts |
+| Santander | `bankscrap-santander` | Work in progress |
+| Shinsei Bank | `bankscrap-shinsei` | Personal accounts |
+
+## Troubleshooting
+
+### Permission Errors
+
+If you encounter permission errors during installation, you may need to use `sudo` (not recommended) or install gems to a user directory:
+
+```bash
+gem install bankscrap-bbva --user-install
+```
+
+Alternatively, use a Ruby version manager like `rbenv` or `rvm` to avoid permission issues.
+
+### Missing Dependencies
+
+If installation fails due to missing dependencies, ensure you have the necessary build tools:
+
+<CodeGroup>
+
+```bash Ubuntu/Debian
+sudo apt-get install build-essential ruby-dev
+```
+
+```bash macOS
+xcode-select --install
+```
+
+```bash Fedora/RHEL
+sudo dnf install gcc gcc-c++ make ruby-devel
+```
+
+</CodeGroup>
+
+## Next Steps
+
+<Tip>
+  Now that you have BankScrap installed, check out the [Quick Start Guide](/quickstart) to fetch your first account balance and transactions.
+</Tip>
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick Start"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Get started with BankScrap in minutes
+  </Card>
+  <Card
+    title="CLI Reference"
+    icon="terminal"
+    href="/cli/commands"
+  >
+    Learn all available CLI commands
+  </Card>
+</CardGroup>

@@ -1,0 +1,554 @@
+---
+title: Adapter Pattern
+description: How BankScrap's adapter system enables multi-bank support through a unified interface
+---
+
+## What is an Adapter?
+
+In BankScrap, an **adapter** is a bank-specific implementation that translates between the bank's API and BankScrap's unified interface. Each adapter is a separate gem that extends the core framework to support a specific financial institution.
+
+<Info>
+  Adapters allow you to interact with different banks using the same code, regardless of their underlying API differences.
+</Info>
+
+## Why Adapters?
+
+Every bank has its own:
+- Authentication mechanism
+- API endpoints and structure
+- Data formats
+- Session management
+- Required credentials
+
+Adapters encapsulate these differences, allowing you to write:
+
+```ruby
+# Same code works for any bank!
+bank = Bankscrap::MyBank::Bank.new(credentials)
+accounts = bank.accounts
+transactions = accounts.first.transactions
+```
+
+## Adapter Architecture
+
+### Package Structure
+
+Each adapter is distributed as a separate gem:
+
+```
+bankscrap-mybank/
+├── lib/
+│   ├── bankscrap-mybank.rb          # Gem entry point
+│   └── bankscrap/
+│       └── mybank/
+│           ├── bank.rb               # Main adapter class
+│           └── version.rb            # Gem version
+├── spec/                             # Tests
+├── bankscrap-mybank.gemspec          # Gem specification
+└── README.md                         # Documentation
+```
+
+### Adapter Class Structure
+
+All adapters follow this basic structure:
+
+```ruby
+require 'bankscrap'
+
+module Bankscrap
+  module MyBank
+    class Bank < ::Bankscrap::Bank
+      # Define bank-specific constants
+      BASE_ENDPOINT = 'https://api.mybank.com'.freeze
+      LOGIN_ENDPOINT = '/auth/login'.freeze
+      
+      # Define required credentials
+      REQUIRED_CREDENTIALS = %i[user password].freeze
+      
+      # Implement required interface methods
+      def login
+        # Bank-specific login logic
+      end
+      
+      def fetch_accounts
+        # Bank-specific account fetching
+      end
+      
+      def fetch_transactions_for(account, start_date:, end_date:)
+        # Bank-specific transaction fetching
+      end
+    end
+  end
+end
+```
+
+## Required Interface Methods
+
+Every adapter **must** implement these methods:
+
+### `login`
+
+Authenticate with the bank's API and establish a session.
+
+```ruby
+private
+
+def login
+  params = {
+    username: @user,
+    password: @password
+  }
+  
+  response = post(BASE_ENDPOINT + LOGIN_ENDPOINT, fields: params.to_json)
+  json = JSON.parse(response)
+  
+  # Store session token in headers for subsequent requests
+  add_headers('Authorization' => "Bearer #{json['token']}")
+end
+```
+
+<Warning>
+  The `login` method is called automatically during initialization. If authentication fails, raise a descriptive error.
+</Warning>
+
+### `fetch_accounts`
+
+Retrieve all accounts for the authenticated user.
+
+```ruby
+def fetch_accounts
+  response = get(BASE_ENDPOINT + ACCOUNTS_ENDPOINT)
+  json = JSON.parse(response)
+  
+  json['accounts'].map do |data|
+    build_account(data)
+  end
+end
+
+private
+
+def build_account(data)
+  Account.new(
+    bank: self,
+    id: data['id'],
+    name: data['name'],
+    available_balance: Money.new(data['available_balance'], data['currency']),
+    balance: Money.new(data['balance'], data['currency']),
+    iban: data['iban'],
+    bic: data['bic'],
+    description: data['description']
+  )
+end
+```
+
+**Must return**: Array of `Bankscrap::Account` objects
+
+### `fetch_transactions_for`
+
+Retrieve transactions for a specific account within a date range.
+
+```ruby
+def fetch_transactions_for(account, start_date: Date.today - 1.month, end_date: Date.today)
+  params = {
+    account_id: account.id,
+    start_date: start_date.strftime('%Y-%m-%d'),
+    end_date: end_date.strftime('%Y-%m-%d')
+  }
+  
+  response = post(BASE_ENDPOINT + TRANSACTIONS_ENDPOINT, fields: params.to_json)
+  json = JSON.parse(response)
+  
+  json['transactions'].map do |data|
+    build_transaction(data, account)
+  end
+end
+
+private
+
+def build_transaction(data, account)
+  Transaction.new(
+    account: account,
+    id: data['id'],
+    amount: Money.new(data['amount'], data['currency']),
+    description: data['description'],
+    effective_date: Date.parse(data['date']),
+    balance: Money.new(data['running_balance'], data['currency'])
+  )
+end
+```
+
+**Parameters**:
+- `account` - The `Bankscrap::Account` object
+- `start_date` - Beginning of date range (default: 1 month ago)
+- `end_date` - End of date range (default: today)
+
+**Must return**: Array of `Bankscrap::Transaction` objects
+
+## Optional Interface Methods
+
+These methods are optional and only needed if the bank supports these features:
+
+### `fetch_cards`
+
+Retrieve all credit/debit cards.
+
+```ruby
+def fetch_cards
+  response = get(BASE_ENDPOINT + CARDS_ENDPOINT)
+  json = JSON.parse(response)
+  
+  json['cards'].map do |data|
+    build_card(data)
+  end
+end
+```
+
+**Must return**: Array of `Bankscrap::Card` objects
+
+### `fetch_loans`
+
+Retrieve all loan products.
+
+```ruby
+def fetch_loans
+  response = get(BASE_ENDPOINT + LOANS_ENDPOINT)
+  json = JSON.parse(response)
+  
+  json['loans'].map do |data|
+    build_loan(data)
+  end
+end
+```
+
+**Must return**: Array of `Bankscrap::Loan` objects
+
+### `fetch_investments`
+
+Retrieve all investment products.
+
+```ruby
+def fetch_investments
+  response = get(BASE_ENDPOINT + INVESTMENTS_ENDPOINT)
+  json = JSON.parse(response)
+  
+  json['investments'].map do |data|
+    build_investment(data)
+  end
+end
+```
+
+**Must return**: Array of `Bankscrap::Investment` objects
+
+## Credential Customization
+
+Different banks require different credentials. Define them using `REQUIRED_CREDENTIALS`:
+
+### Basic Credentials
+
+```ruby
+REQUIRED_CREDENTIALS = %i[user password].freeze
+```
+
+### Custom Credentials
+
+```ruby
+REQUIRED_CREDENTIALS = %i[customer_id pin memorable_word].freeze
+```
+
+### With Additional Processing
+
+Use the initialization block for custom credential handling:
+
+```ruby
+def initialize(credentials = {})
+  super do
+    # Hash the PIN before using it
+    @pin_hash = Digest::SHA256.hexdigest(@pin)
+    
+    # Generate a device ID for this session
+    @device_id = SecureRandom.hex(16)
+    
+    # Add custom headers
+    add_headers(
+      'X-Device-ID' => @device_id,
+      'X-API-Version' => '2.0'
+    )
+  end
+end
+```
+
+## HTTP Helper Methods
+
+The base `Bank` class provides HTTP methods for API communication:
+
+### GET Requests
+
+```ruby
+# Simple GET
+response = get(url)
+
+# With query parameters
+response = get(url, params: [['key', 'value'], ['foo', 'bar']])
+
+# With custom referer
+response = get(url, referer: 'https://mybank.com/accounts')
+```
+
+### POST Requests
+
+```ruby
+# JSON POST
+response = post(url, fields: { key: 'value' }.to_json)
+
+# Form POST
+response = post(url, fields: { username: @user, password: @password })
+```
+
+### PUT Requests
+
+```ruby
+response = put(url, fields: { status: 'active' }.to_json)
+```
+
+### Custom Headers
+
+```ruby
+# Add headers permanently
+add_headers('Authorization' => 'Bearer token123')
+
+# Use headers for a single block
+with_headers('X-Request-ID' => request_id) do
+  response = get(url)
+end
+# Headers are reset after the block
+```
+
+## Generator Tool
+
+BankScrap includes a generator to scaffold new adapters quickly:
+
+```bash
+bankscrap generate MyBank
+```
+
+This creates a complete gem structure with:
+- Adapter template class
+- Gemspec configuration
+- Test setup with RSpec
+- README template
+- License and gitignore files
+
+**Generated adapter location**:
+```ruby generators/templates/lib/bankscrap/%bank_name_dasherized%/bank.rb.tt
+```
+
+The template includes:
+- All interface methods with comments
+- Example API endpoint constants
+- Builder methods for each model type
+- Credential handling examples
+
+## Real-World Example
+
+Here's a simplified real-world adapter pattern:
+
+```ruby
+module Bankscrap
+  module BBVA
+    class Bank < ::Bankscrap::Bank
+      BASE_ENDPOINT = 'https://bancamovil.grupobbva.com'.freeze
+      LOGIN_ENDPOINT = '/DFAUTH/slod/DFServletXML'.freeze
+      
+      REQUIRED_CREDENTIALS = %i[user password].freeze
+      
+      def initialize(credentials = {})
+        super do
+          # Generate unique device identifier
+          user_agent = SecureRandom.hex(32).upcase
+          add_headers('User-Agent' => "#{user_agent};Android;BBVA;1.0")
+        end
+      end
+      
+      private
+      
+      def login
+        params = {
+          'origen' => 'enpp',
+          'eai_user' => @user,
+          'eai_password' => @password
+        }
+        
+        response = post(BASE_ENDPOINT + LOGIN_ENDPOINT, fields: params)
+        
+        # Parse XML response and extract session token
+        doc = Nokogiri::XML(response)
+        @token = doc.at('token').text
+        
+        add_headers('Authorization' => @token)
+      end
+      
+      def fetch_accounts
+        # Implementation...
+      end
+      
+      def fetch_transactions_for(account, start_date:, end_date:)
+        # Implementation...
+      end
+    end
+  end
+end
+```
+
+## Testing Your Adapter
+
+When building an adapter, test:
+
+1. **Authentication**: Login succeeds with valid credentials
+2. **Account fetching**: Returns correct account data
+3. **Transaction fetching**: Retrieves transactions for date ranges
+4. **Error handling**: Gracefully handles API errors
+5. **Edge cases**: Empty results, malformed data, network issues
+
+```ruby spec/bank_spec.rb
+RSpec.describe Bankscrap::MyBank::Bank do
+  let(:credentials) { { user: 'test', password: 'secret' } }
+  
+  describe '#initialize' do
+    it 'authenticates successfully' do
+      VCR.use_cassette('login') do
+        expect { described_class.new(credentials) }.not_to raise_error
+      end
+    end
+  end
+  
+  describe '#fetch_accounts' do
+    it 'returns array of accounts' do
+      VCR.use_cassette('accounts') do
+        bank = described_class.new(credentials)
+        expect(bank.accounts).to all(be_a(Bankscrap::Account))
+      end
+    end
+  end
+end
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Constants for Endpoints">
+    Define all API endpoints as frozen constants at the class level for easy maintenance and testing.
+    
+    ```ruby
+    BASE_ENDPOINT = 'https://api.bank.com'.freeze
+    LOGIN_ENDPOINT = '/auth'.freeze
+    ```
+  </Accordion>
+  
+  <Accordion title="Validate API Responses">
+    Always check that API responses contain expected data before parsing.
+    
+    ```ruby
+    json = JSON.parse(response)
+    raise 'Invalid response' unless json['status'] == 'success'
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Money Objects">
+    Always create `Money` objects for amounts, never use raw floats or integers.
+    
+    ```ruby
+    # Good
+    Money.new(amount_cents, 'EUR')
+    
+    # Bad
+    amount.to_f
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle Date Formats">
+    Banks use different date formats. Parse them explicitly.
+    
+    ```ruby
+    Date.strptime(data['date'], '%d/%m/%Y')
+    ```
+  </Accordion>
+  
+  <Accordion title="Store Raw Data">
+    Keep the original API response in the `raw_data` attribute for debugging.
+    
+    ```ruby
+    Account.new(
+      # ... other fields
+      raw_data: data
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Common Patterns
+
+### Session Token Management
+
+```ruby
+def login
+  response = post(LOGIN_ENDPOINT, fields: credentials)
+  @session_token = JSON.parse(response)['token']
+  add_headers('X-Session-Token' => @session_token)
+end
+```
+
+### Pagination Handling
+
+```ruby
+def fetch_transactions_for(account, start_date:, end_date:)
+  transactions = []
+  page = 1
+  
+  loop do
+    response = get(TRANSACTIONS_ENDPOINT, params: [
+      ['account', account.id],
+      ['page', page]
+    ])
+    
+    data = JSON.parse(response)
+    break if data['transactions'].empty?
+    
+    transactions += data['transactions'].map { |t| build_transaction(t, account) }
+    page += 1
+  end
+  
+  transactions
+end
+```
+
+### Error Recovery
+
+```ruby
+def fetch_accounts
+  response = get(ACCOUNTS_ENDPOINT)
+  JSON.parse(response)['accounts'].map { |a| build_account(a) }
+rescue JSON::ParserError => e
+  log "Failed to parse accounts response: #{e.message}"
+  []
+end
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Creating Adapters" icon="hammer" href="/adapters/generator">
+    Step-by-step guide to building your first adapter
+  </Card>
+  
+  <Card title="Bank Class Reference" icon="book" href="/concepts/bank-class">
+    Complete API reference for the Bank base class
+  </Card>
+  
+  <Card title="Data Models" icon="shapes" href="/concepts/models">
+    Learn about Account, Transaction, and other models
+  </Card>
+  
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Understanding BankScrap's overall architecture
+  </Card>
+</CardGroup>

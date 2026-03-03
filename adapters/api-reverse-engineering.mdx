@@ -1,0 +1,511 @@
+---
+title: 'Reverse Engineering Bank APIs'
+description: 'Techniques for discovering and using undocumented bank APIs'
+---
+
+Many banks have mobile apps or single-page web applications that communicate with private APIs. These APIs are often easier to work with than web scraping.
+
+## Why Reverse Engineer APIs?
+
+- **More reliable** than web scraping (HTML changes frequently)
+- **Better performance** (JSON responses vs. parsing HTML)
+- **Cleaner code** (REST endpoints vs. form submission)
+- **More data** (APIs often return more detailed information)
+
+<Warning>
+Reverse engineering may violate a bank's terms of service. Use at your own risk and always respect rate limits.
+</Warning>
+
+## Discovery Techniques
+
+### Browser DevTools
+
+The easiest way to discover API endpoints:
+
+<Steps>
+  <Step title="Open the bank's web app">
+    Navigate to your bank's online banking in Chrome or Firefox.
+  </Step>
+
+  <Step title="Open DevTools Network tab">
+    Press F12 and go to the Network tab. Check "Preserve log" to keep history.
+  </Step>
+
+  <Step title="Filter API requests">
+    Filter by:
+    - **XHR** (XMLHttpRequest) - Traditional AJAX calls
+    - **Fetch** - Modern fetch API calls
+    - **WS** - WebSocket connections (less common)
+  </Step>
+
+  <Step title="Perform actions">
+    Log in, view accounts, check transactions. Watch the Network tab.
+  </Step>
+
+  <Step title="Analyze requests">
+    Click on each request to see:
+    - Request URL and method
+    - Request headers
+    - Request payload
+    - Response data
+    - Response headers
+  </Step>
+
+  <Step title="Copy as cURL">
+    Right-click interesting requests and select "Copy > Copy as cURL" to get the exact request format.
+  </Step>
+</Steps>
+
+### Mobile App Proxying
+
+For mobile-only APIs:
+
+<Steps>
+  <Step title="Install a proxy tool">
+    Install [Charles Proxy](https://www.charlesproxy.com/), [mitmproxy](https://mitmproxy.org/), or [Burp Suite](https://portswigger.net/burp).
+  </Step>
+
+  <Step title="Configure proxy on device">
+    Set your phone's Wi-Fi proxy to your computer's IP address and proxy port.
+  </Step>
+
+  <Step title="Install SSL certificate">
+    To see HTTPS traffic, install the proxy's SSL certificate on your device.
+  </Step>
+
+  <Step title="Use the bank app">
+    Open the bank's mobile app and perform actions. The proxy will capture all API calls.
+  </Step>
+
+  <Step title="Document endpoints">
+    Take notes on:
+    - Base URL
+    - Authentication flow
+    - Required headers
+    - Endpoint paths
+    - Request/response formats
+  </Step>
+</Steps>
+
+## Common API Patterns
+
+### RESTful JSON APIs
+
+Most modern banks use REST APIs with JSON:
+
+```ruby
+module Bankscrap
+  module ModernBank
+    class Bank < ::Bankscrap::Bank
+      BASE_ENDPOINT = 'https://api.modernbank.com/v2'.freeze
+      LOGIN_ENDPOINT = '/auth/login'.freeze
+      ACCOUNTS_ENDPOINT = '/accounts'.freeze
+      TRANSACTIONS_ENDPOINT = '/accounts/:id/transactions'.freeze
+      
+      REQUIRED_CREDENTIALS = %i[user password].freeze
+
+      def initialize(credentials = {})
+        super do
+          # Common headers for JSON APIs
+          add_headers(
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+            'User-Agent' => 'ModernBank-iOS/4.2.1'
+          )
+        end
+      end
+
+      private
+
+      def login
+        payload = {
+          username: @user,
+          password: @password,
+          device_id: device_id
+        }
+        
+        response = post(BASE_ENDPOINT + LOGIN_ENDPOINT, fields: payload.to_json)
+        json = JSON.parse(response)
+        
+        @access_token = json['access_token']
+        add_headers('Authorization' => "Bearer #{@access_token}")
+      end
+
+      def fetch_accounts
+        response = get(BASE_ENDPOINT + ACCOUNTS_ENDPOINT)
+        json = JSON.parse(response)
+        json['data'].map { |account| build_account(account) }
+      end
+
+      def fetch_transactions_for(account, start_date:, end_date:)
+        url = BASE_ENDPOINT + TRANSACTIONS_ENDPOINT.sub(':id', account.id)
+        params = [
+          ['start_date', start_date.strftime('%Y-%m-%d')],
+          ['end_date', end_date.strftime('%Y-%m-%d')]
+        ]
+        
+        response = get(url, params: params)
+        json = JSON.parse(response)
+        json['data'].map { |txn| build_transaction(txn, account) }
+      end
+
+      def device_id
+        @device_id ||= SecureRandom.uuid
+      end
+    end
+  end
+end
+```
+
+### GraphQL APIs
+
+Some banks use GraphQL:
+
+```ruby
+def fetch_accounts
+  query = <<-GRAPHQL
+    query GetAccounts {
+      accounts {
+        id
+        name
+        balance {
+          amount
+          currency
+        }
+        iban
+      }
+    }
+  GRAPHQL
+  
+  response = post(
+    BASE_ENDPOINT + '/graphql',
+    fields: { query: query }.to_json
+  )
+  
+  json = JSON.parse(response)
+  json['data']['accounts'].map { |account| build_account(account) }
+end
+
+def fetch_transactions_for(account, start_date:, end_date:)
+  query = <<-GRAPHQL
+    query GetTransactions($accountId: ID!, $startDate: Date!, $endDate: Date!) {
+      transactions(accountId: $accountId, startDate: $startDate, endDate: $endDate) {
+        id
+        amount
+        description
+        date
+        balance
+      }
+    }
+  GRAPHQL
+  
+  variables = {
+    accountId: account.id,
+    startDate: start_date.strftime('%Y-%m-%d'),
+    endDate: end_date.strftime('%Y-%m-%d')
+  }
+  
+  response = post(
+    BASE_ENDPOINT + '/graphql',
+    fields: { query: query, variables: variables }.to_json
+  )
+  
+  json = JSON.parse(response)
+  json['data']['transactions'].map { |txn| build_transaction(txn, account) }
+end
+```
+
+## Authentication Patterns
+
+### JWT Tokens
+
+```ruby
+def login
+  response = post(
+    LOGIN_ENDPOINT,
+    fields: {
+      username: @user,
+      password: @password
+    }.to_json
+  )
+  
+  json = JSON.parse(response)
+  @jwt_token = json['token']
+  
+  add_headers('Authorization' => "Bearer #{@jwt_token}")
+end
+```
+
+### OAuth 2.0 Password Grant
+
+```ruby
+def login
+  response = post(
+    TOKEN_ENDPOINT,
+    fields: {
+      grant_type: 'password',
+      username: @user,
+      password: @password,
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET
+    }.to_json
+  )
+  
+  json = JSON.parse(response)
+  @access_token = json['access_token']
+  @refresh_token = json['refresh_token']
+  
+  add_headers('Authorization' => "Bearer #{@access_token}")
+end
+```
+
+### Custom Signature-Based Auth
+
+Some banks use HMAC or other signature schemes:
+
+```ruby
+require 'openssl'
+
+def initialize(credentials = {})
+  super do
+    @api_key = 'YOUR_API_KEY'
+    @api_secret = 'YOUR_API_SECRET'
+  end
+end
+
+def login
+  timestamp = Time.now.to_i
+  signature = generate_signature(timestamp)
+  
+  add_headers(
+    'X-API-Key' => @api_key,
+    'X-Timestamp' => timestamp.to_s,
+    'X-Signature' => signature
+  )
+  
+  # Some APIs may still require a login call
+  post(LOGIN_ENDPOINT, fields: { username: @user }.to_json)
+end
+
+private
+
+def generate_signature(timestamp)
+  data = "#{@api_key}#{timestamp}#{@user}"
+  OpenSSL::HMAC.hexdigest('SHA256', @api_secret, data)
+end
+```
+
+## Handling Complex Authentication
+
+### Multi-Step Authentication
+
+```ruby
+def login
+  # Step 1: Get challenge
+  response = post(
+    LOGIN_ENDPOINT + '/challenge',
+    fields: { username: @user }.to_json
+  )
+  challenge = JSON.parse(response)['challenge']
+  
+  # Step 2: Solve challenge
+  solution = solve_challenge(challenge)
+  
+  # Step 3: Submit credentials with solution
+  response = post(
+    LOGIN_ENDPOINT + '/authenticate',
+    fields: {
+      username: @user,
+      password: @password,
+      challenge: challenge,
+      solution: solution
+    }.to_json
+  )
+  
+  token = JSON.parse(response)['token']
+  add_headers('Authorization' => "Bearer #{token}")
+end
+
+private
+
+def solve_challenge(challenge)
+  # This could be a hash, encryption, or other calculation
+  # based on the challenge and your credentials
+  Digest::SHA256.hexdigest(challenge + @password)
+end
+```
+
+### Device Fingerprinting
+
+Some APIs require device identification:
+
+```ruby
+require 'securerandom'
+
+def initialize(credentials = {})
+  super do
+    @device_id = SecureRandom.uuid
+    @device_fingerprint = generate_fingerprint
+    
+    add_headers(
+      'X-Device-ID' => @device_id,
+      'X-Device-Fingerprint' => @device_fingerprint,
+      'User-Agent' => 'BankApp/3.1.4 (iPhone; iOS 15.0; Scale/3.00)'
+    )
+  end
+end
+
+private
+
+def generate_fingerprint
+  # Mimic a device fingerprint
+  components = [
+    'iPhone13,2',
+    'iOS/15.0',
+    'en-US',
+    'America/New_York'
+  ]
+  Digest::SHA256.hexdigest(components.join('|'))
+end
+```
+
+## Request Encryption
+
+Some banks encrypt request/response bodies:
+
+```ruby
+require 'openssl'
+require 'base64'
+
+def fetch_accounts
+  # Encrypt the request
+  encrypted_request = encrypt({ user_id: @user })
+  
+  response = post(
+    ACCOUNTS_ENDPOINT,
+    fields: { data: encrypted_request }.to_json
+  )
+  
+  # Decrypt the response
+  json = JSON.parse(response)
+  decrypted_data = decrypt(json['data'])
+  
+  decrypted_data['accounts'].map { |account| build_account(account) }
+end
+
+private
+
+def encrypt(data)
+  cipher = OpenSSL::Cipher.new('AES-256-CBC')
+  cipher.encrypt
+  cipher.key = @encryption_key
+  
+  encrypted = cipher.update(data.to_json) + cipher.final
+  Base64.strict_encode64(encrypted)
+end
+
+def decrypt(encrypted_data)
+  cipher = OpenSSL::Cipher.new('AES-256-CBC')
+  cipher.decrypt
+  cipher.key = @encryption_key
+  
+  decrypted = cipher.update(Base64.strict_decode64(encrypted_data)) + cipher.final
+  JSON.parse(decrypted)
+end
+```
+
+## Rate Limiting
+
+Respect API rate limits:
+
+```ruby
+def fetch_transactions_for(account, start_date:, end_date:)
+  # Add delay between requests
+  sleep 0.5
+  
+  response = get(
+    TRANSACTIONS_ENDPOINT,
+    params: [
+      ['account_id', account.id],
+      ['start_date', start_date.strftime('%Y-%m-%d')],
+      ['end_date', end_date.strftime('%Y-%m-%d')]
+    ]
+  )
+  
+  json = JSON.parse(response)
+  
+  # Check for rate limit headers
+  if response.include?('X-RateLimit-Remaining')
+    remaining = response.match(/X-RateLimit-Remaining: (\d+)/)[1].to_i
+    log("Rate limit remaining: #{remaining}")
+    
+    # Back off if close to limit
+    sleep 2 if remaining < 10
+  end
+  
+  json['transactions'].map { |txn| build_transaction(txn, account) }
+end
+```
+
+## Testing API Calls
+
+Test your API implementation:
+
+```ruby
+# Use curl to verify endpoints
+system(<<~CURL)
+  curl -X POST https://api.bank.com/login \
+    -H 'Content-Type: application/json' \
+    -d '{"username":"test","password":"test"}'
+CURL
+
+# Test in IRB
+require 'json'
+require 'net/http'
+
+uri = URI('https://api.bank.com/login')
+http = Net::HTTP.new(uri.host, uri.port)
+http.use_ssl = true
+
+request = Net::HTTP::Post.new(uri.path)
+request['Content-Type'] = 'application/json'
+request.body = { username: 'test', password: 'test' }.to_json
+
+response = http.request(request)
+puts response.body
+```
+
+## Documentation
+
+Document the API you've discovered:
+
+```ruby
+# In your adapter file, add comments:
+
+# API Documentation (reverse engineered)
+#
+# Base URL: https://api.modernbank.com/v2
+#
+# Authentication:
+#   POST /auth/login
+#   Body: { username, password, device_id }
+#   Returns: { access_token, refresh_token, expires_in }
+#   
+#   All subsequent requests require:
+#   Authorization: Bearer {access_token}
+#
+# Endpoints:
+#   GET /accounts
+#   Returns: { data: [{ id, name, balance: { amount, currency }, iban }] }
+#
+#   GET /accounts/:id/transactions?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+#   Returns: { data: [{ id, amount, description, date, balance }] }
+#
+# Rate Limits:
+#   100 requests per minute per user
+#   Headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
+```
+
+<Note>
+Keep detailed notes about the API as you discover it. This will help with maintenance and troubleshooting.
+</Note>

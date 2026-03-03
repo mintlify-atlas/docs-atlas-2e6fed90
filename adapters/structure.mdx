@@ -1,0 +1,261 @@
+---
+title: 'Adapter Structure'
+description: 'Understanding the file organization and architecture of BankScrap adapters'
+---
+
+BankScrap adapters follow a consistent structure that makes them easy to maintain and integrate with the core library.
+
+## Directory Structure
+
+A typical BankScrap adapter has the following structure:
+
+```
+bankscrap-bank-name/
+├── lib/
+│   ├── bankscrap-bank-name.rb          # Main entry point
+│   └── bankscrap/
+│       └── bank-name/
+│           ├── bank.rb                  # Bank adapter implementation
+│           └── version.rb               # Version constant
+├── spec/                                # Tests (optional but recommended)
+│   ├── spec_helper.rb
+│   └── bank_spec.rb
+├── bankscrap-bank-name.gemspec         # Gem specification
+├── Gemfile
+├── Rakefile
+├── README.md
+├── LICENSE.txt
+└── .gitignore
+```
+
+## Main Entry Point
+
+The main entry point (`lib/bankscrap-bank-name.rb`) loads the adapter:
+
+```ruby lib/bankscrap-bank-name.rb
+require 'bankscrap'
+require 'bankscrap/bank-name/version'
+require 'bankscrap/bank-name/bank'
+```
+
+This file ensures all dependencies are loaded in the correct order.
+
+## Version File
+
+The version file defines the adapter version:
+
+```ruby lib/bankscrap/bank-name/version.rb
+module Bankscrap
+  module BankName
+    VERSION = '1.0.0'.freeze
+  end
+end
+```
+
+<Note>
+Follow [Semantic Versioning](https://semver.org/) for version numbers.
+</Note>
+
+## Bank Adapter Class
+
+The main adapter class inherits from `Bankscrap::Bank`:
+
+```ruby lib/bankscrap/bank-name/bank.rb
+module Bankscrap
+  module BankName
+    class Bank < ::Bankscrap::Bank
+      # Implementation here
+    end
+  end
+end
+```
+
+### Key Components
+
+<Steps>
+  <Step title="Constants">
+    Define API endpoints and credentials:
+
+    ```ruby
+    BASE_ENDPOINT         = 'https://api.mybank.com'.freeze
+    LOGIN_ENDPOINT        = '/auth/login'.freeze
+    ACCOUNTS_ENDPOINT     = '/api/accounts'.freeze
+    TRANSACTIONS_ENDPOINT = '/api/transactions'.freeze
+    
+    REQUIRED_CREDENTIALS  = %i[user password].freeze
+    ```
+  </Step>
+
+  <Step title="Initialization">
+    The `initialize` method sets up the adapter:
+
+    ```ruby
+    def initialize(credentials = {})
+      super do
+        # Custom initialization code
+        # Add headers, process credentials, etc.
+      end
+    end
+    ```
+
+    The parent class handles:
+    - Credential validation
+    - HTTP client initialization
+    - Calling the `login` method
+    - Fetching accounts, loans, cards, investments
+  </Step>
+
+  <Step title="Required Methods">
+    Implement these three core methods:
+
+    - `login` - Authenticate with the bank
+    - `fetch_accounts` - Retrieve all accounts
+    - `fetch_transactions_for(account, start_date:, end_date:)` - Get transactions
+  </Step>
+
+  <Step title="Optional Methods">
+    Implement if the bank supports them:
+
+    - `fetch_loans` - Retrieve loans
+    - `fetch_cards` - Retrieve credit cards
+    - `fetch_investments` - Retrieve investments
+  </Step>
+
+  <Step title="Builder Methods">
+    Private methods to convert API data to BankScrap objects:
+
+    - `build_account(data)` - Create Account objects
+    - `build_transaction(data, account)` - Create Transaction objects
+    - `build_loan(data)` - Create Loan objects
+    - `build_card(data)` - Create Card objects
+  </Step>
+</Steps>
+
+## Inherited Methods
+
+The `Bankscrap::Bank` base class provides several utility methods:
+
+### HTTP Methods
+
+```ruby
+# GET request
+get(url, params: [], referer: nil)
+
+# POST request
+post(url, fields: {})
+
+# PUT request
+put(url, fields: {})
+```
+
+### Header Management
+
+```ruby
+# Add headers permanently
+add_headers('Content-Type' => 'application/json')
+
+# Temporary headers for a block
+with_headers('Authorization' => 'Bearer token') do
+  # Requests here use temporary headers
+end
+```
+
+### Cookie Initialization
+
+```ruby
+# Initialize cookies by visiting a URL
+initialize_cookie('https://www.bank.com')
+```
+
+### Logging
+
+```ruby
+# Log messages (only when Bankscrap.log is enabled)
+log('Fetching accounts...')
+```
+
+## Credential Handling
+
+Credentials are automatically set as instance variables:
+
+```ruby
+REQUIRED_CREDENTIALS = %i[user password birthday].freeze
+
+# After initialization, these are available:
+@user      # From credentials hash or ENV['BANKSCRAP_BANK_NAME_USER']
+@password  # From credentials hash or ENV['BANKSCRAP_BANK_NAME_PASSWORD']
+@birthday  # From credentials hash or ENV['BANKSCRAP_BANK_NAME_BIRTHDAY']
+```
+
+## Module Namespace
+
+Always use proper namespacing:
+
+```ruby
+module Bankscrap
+  module BankName  # Your bank's module
+    class Bank < ::Bankscrap::Bank
+      # Use :: prefix for core classes to avoid conflicts
+      def build_account(data)
+        ::Bankscrap::Account.new(
+          bank: self,
+          # ...
+        )
+      end
+    end
+  end
+end
+```
+
+<Warning>
+Always use `::Bankscrap::Account`, `::Bankscrap::Transaction`, etc. to reference core classes to avoid namespace conflicts.
+</Warning>
+
+## File Organization Best Practices
+
+1. **Keep bank.rb focused** - Only include adapter logic
+2. **Extract helpers** - Create separate files for complex utilities
+3. **Use constants** - Define all endpoints and magic values as constants
+4. **Comment TODOs** - Mark incomplete sections clearly
+5. **Follow Ruby conventions** - Use proper indentation and naming
+
+## Example Structure
+
+Here's a minimal but complete adapter structure:
+
+```ruby
+module Bankscrap
+  module MyBank
+    class Bank < ::Bankscrap::Bank
+      BASE_ENDPOINT = 'https://api.mybank.com'.freeze
+      REQUIRED_CREDENTIALS = %i[user password].freeze
+
+      def initialize(credentials = {})
+        super
+      end
+
+      private
+
+      def login
+        # Authentication logic
+      end
+
+      def fetch_accounts
+        # Return array of Account objects
+      end
+
+      def fetch_transactions_for(account, start_date:, end_date:)
+        # Return array of Transaction objects
+      end
+
+      def build_account(data)
+        # Convert API data to Account object
+      end
+
+      def build_transaction(data, account)
+        # Convert API data to Transaction object
+      end
+    end
+  end
+end
+```

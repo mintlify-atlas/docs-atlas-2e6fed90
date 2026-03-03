@@ -1,0 +1,188 @@
+---
+title: 'Bankscrap::Investment'
+description: 'Represents a bank investment product'
+---
+
+## Overview
+
+The `Bankscrap::Investment` class represents an investment or securities product held at a bank.
+
+## Attributes
+
+<ResponseField name="bank" type="Bankscrap::Bank">
+  Reference to the bank instance that owns this investment
+</ResponseField>
+
+<ResponseField name="id" type="String">
+  Investment identifier
+</ResponseField>
+
+<ResponseField name="name" type="String">
+  Investment name or label
+</ResponseField>
+
+<ResponseField name="balance" type="Numeric">
+  Current balance or value of the investment
+  
+  Note: Unlike other classes, Investment does not enforce a Money object for balance.
+</ResponseField>
+
+<ResponseField name="currency" type="String">
+  Currency code (e.g., "EUR", "USD")
+</ResponseField>
+
+<ResponseField name="investment" type="Object">
+  Additional investment-specific data or details
+</ResponseField>
+
+## Methods
+
+### initialize(params = {})
+
+Creates a new investment instance.
+
+<ParamField path="params" type="Hash" default="{}">
+  Investment attributes
+  
+  <Expandable title="properties">
+    <ParamField path="bank" type="Bankscrap::Bank">
+      Bank instance reference
+    </ParamField>
+    
+    <ParamField path="id" type="String">
+      Investment identifier
+    </ParamField>
+    
+    <ParamField path="name" type="String">
+      Investment name
+    </ParamField>
+    
+    <ParamField path="balance" type="Numeric">
+      Investment balance or value
+    </ParamField>
+    
+    <ParamField path="currency" type="String">
+      Currency code
+    </ParamField>
+    
+    <ParamField path="investment" type="Object">
+      Additional investment details
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Example:**
+
+```ruby
+investment = Bankscrap::Investment.new(
+  bank: bank,
+  id: 'INV123',
+  name: 'Stock Portfolio',
+  balance: 50000.00,
+  currency: 'EUR',
+  investment: {
+    type: 'equity',
+    shares: 100,
+    price_per_share: 500.00
+  }
+)
+```
+
+## Usage Examples
+
+### Accessing Investments
+
+```ruby
+# Initialize bank and get investments
+bank = Bankscrap::MyBank.new(user: 'username', password: 'password')
+
+# Check if bank supports investments
+if bank.investments
+  bank.investments.each do |investment|
+    puts "Investment: #{investment.name}"
+    puts "Balance: #{investment.balance} #{investment.currency}"
+    puts "ID: #{investment.id}"
+    puts ""
+  end
+else
+  puts "This bank adapter does not support investments"
+end
+```
+
+### Calculating Total Investment Value
+
+```ruby
+# Calculate total investment value (assuming same currency)
+total_value = bank.investments.sum { |inv| inv.balance.to_f }
+
+puts "Total investment value: #{total_value} EUR"
+```
+
+### Filtering by Investment Type
+
+```ruby
+# Group investments by type (if type is stored in investment attribute)
+by_type = bank.investments.group_by do |inv|
+  inv.investment.is_a?(Hash) ? inv.investment[:type] : 'unknown'
+end
+
+by_type.each do |type, investments|
+  total = investments.sum { |inv| inv.balance.to_f }
+  puts "#{type}: #{total} (#{investments.count} investments)"
+end
+```
+
+### Finding Specific Investments
+
+```ruby
+# Find investment by name
+portfolio = bank.investments.find { |inv| inv.name.include?('Portfolio') }
+
+# Find investment by ID
+investment = bank.investments.find { |inv| inv.id == 'INV123' }
+```
+
+## Bank Adapter Support
+
+Not all bank adapters support fetching investments. To check if a bank supports investments:
+
+```ruby
+bank = Bankscrap::MyBank.new(user: 'username', password: 'password')
+
+if bank.respond_to?(:fetch_investments)
+  puts "This bank supports investment fetching"
+else
+  puts "This bank does not support investment fetching"
+end
+```
+
+## Differences from Other Classes
+
+Unlike `Account`, `Card`, `Loan`, and `Transaction` classes, the `Investment` class:
+
+- Does not require a `Money` object for the balance attribute
+- Stores currency as a separate string attribute
+- Has a flexible `investment` attribute for storing additional data
+- Has a simpler structure overall
+
+## Working with Investment Data
+
+```ruby
+# Access investment details
+investment = bank.investments.first
+
+puts "ID: #{investment.id}"
+puts "Name: #{investment.name}"
+puts "Balance: #{investment.balance} #{investment.currency}"
+
+# Access additional investment data
+if investment.investment.is_a?(Hash)
+  investment.investment.each do |key, value|
+    puts "  #{key}: #{value}"
+  end
+end
+```
+
+## Implementation Notes
+
+The Investment class is more flexible than other BankScrap classes and is designed to accommodate various types of investment products that banks may offer. Bank adapters can store custom data in the `investment` attribute to handle bank-specific investment details.

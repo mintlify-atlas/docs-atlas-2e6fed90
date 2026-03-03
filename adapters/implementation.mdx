@@ -1,0 +1,341 @@
+---
+title: 'Implementing Adapter Methods'
+description: 'Step-by-step guide to implementing required and optional adapter methods'
+---
+
+Every BankScrap adapter must implement three core methods: `login`, `fetch_accounts`, and `fetch_transactions_for`. This guide walks through implementing each method.
+
+## Required Methods
+
+### login Method
+
+The `login` method authenticates with the bank's API or website.
+
+<Steps>
+  <Step title="Define the method">
+    ```ruby
+    private
+
+    def login
+      # Authentication logic here
+    end
+    ```
+
+    The method is called automatically during initialization.
+  </Step>
+
+  <Step title="Use credentials">
+    Access credentials as instance variables:
+
+    ```ruby
+    def login
+      params = {
+        user: @user,
+        password: @password
+      }
+    end
+    ```
+  </Step>
+
+  <Step title="Make the request">
+    <CodeGroup>
+    ```ruby API-based
+    def login
+      params = {
+        username: @user,
+        password: @password
+      }
+      
+      response = post(
+        BASE_ENDPOINT + LOGIN_ENDPOINT,
+        fields: params.to_json
+      )
+      
+      json = JSON.parse(response)
+      @auth_token = json['token']
+      
+      # Add token to headers for subsequent requests
+      add_headers('Authorization' => "Bearer #{@auth_token}")
+    end
+    ```
+
+    ```ruby Web scraping
+    def login
+      # Visit login page to get cookies
+      initialize_cookie(BASE_ENDPOINT + '/login')
+      
+      # Submit login form
+      form_data = {
+        'username' => @user,
+        'password' => @password,
+        'submit' => 'Login'
+      }
+      
+      post(BASE_ENDPOINT + '/auth', fields: form_data)
+    end
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Handle errors">
+    ```ruby
+    def login
+      params = { user: @user, password: @password }
+      response = post(LOGIN_ENDPOINT, fields: params.to_json)
+      json = JSON.parse(response)
+      
+      raise 'Login failed' unless json['success']
+      
+      @auth_token = json['token']
+      add_headers('Authorization' => "Bearer #{@auth_token}")
+    end
+    ```
+  </Step>
+</Steps>
+
+### fetch_accounts Method
+
+This method retrieves all accounts for the authenticated user.
+
+<Steps>
+  <Step title="Make the API request">
+    ```ruby
+    def fetch_accounts
+      response = get(BASE_ENDPOINT + ACCOUNTS_ENDPOINT)
+      json = JSON.parse(response)
+      json['accounts'].map { |data| build_account(data) }
+    end
+    ```
+  </Step>
+
+  <Step title="Build Account objects">
+    Create a helper method to convert API data:
+
+    ```ruby
+    def build_account(data)
+      ::Bankscrap::Account.new(
+        bank: self,
+        id: data['id'],
+        name: data['name'],
+        available_balance: Money.new(data['available'] * 100, data['currency']),
+        balance: Money.new(data['balance'] * 100, data['currency']),
+        iban: data['iban'],
+        description: data['description']
+      )
+    end
+    ```
+  </Step>
+
+  <Step title="Handle Money objects">
+    <Note>
+    BankScrap uses the [Money gem](https://github.com/RubyMoney/money). Amounts must be in cents (smallest currency unit).
+    </Note>
+
+    ```ruby
+    # If API returns amount in euros (e.g., 1234.56)
+    balance: Money.new(data['balance'] * 100, 'EUR')  # 123456 cents
+    
+    # If API returns amount in cents already
+    balance: Money.new(data['balance_cents'], 'EUR')
+    ```
+  </Step>
+</Steps>
+
+### fetch_transactions_for Method
+
+This method retrieves transactions for a specific account and date range.
+
+```ruby
+def fetch_transactions_for(account, start_date: Date.today - 1.month, end_date: Date.today)
+  params = {
+    account_id: account.id,
+    from: start_date.strftime('%Y-%m-%d'),
+    to: end_date.strftime('%Y-%m-%d')
+  }
+  
+  response = post(
+    BASE_ENDPOINT + TRANSACTIONS_ENDPOINT,
+    fields: params.to_json
+  )
+  
+  json = JSON.parse(response)
+  json['transactions'].map { |data| build_transaction(data, account) }
+end
+```
+
+### Building Transaction Objects
+
+```ruby
+def build_transaction(data, account)
+  ::Bankscrap::Transaction.new(
+    account: account,
+    id: data['id'],
+    amount: Money.new(data['amount'] * 100, data['currency']),
+    description: data['description'],
+    effective_date: Date.parse(data['date']),
+    balance: Money.new(data['balance'] * 100, data['currency'])
+  )
+end
+```
+
+<Warning>
+The `amount` field must be a Money object. The `account` field must be the Bankscrap::Account object passed to the method.
+</Warning>
+
+## Optional Methods
+
+### fetch_loans Method
+
+Implement this if the bank supports loan information:
+
+```ruby
+def fetch_loans
+  response = get(BASE_ENDPOINT + LOANS_ENDPOINT)
+  json = JSON.parse(response)
+  json['loans'].map { |data| build_loan(data) }
+end
+
+def build_loan(data)
+  ::Bankscrap::Loan.new(
+    bank: self,
+    id: data['id'],
+    name: data['name'],
+    description: data['description'],
+    amount: Money.new(data['amount'] * 100, data['currency']),
+    is_mortage: data['type'] == 'mortgage'
+  )
+end
+```
+
+### fetch_cards Method
+
+Implement this if the bank provides credit card information:
+
+```ruby
+def fetch_cards
+  response = get(BASE_ENDPOINT + CARDS_ENDPOINT)
+  json = JSON.parse(response)
+  json['cards'].map { |data| build_card(data) }
+end
+
+def build_card(data)
+  ::Bankscrap::Card.new(
+    bank: self,
+    id: data['id'],
+    name: data['name'],
+    description: data['pan'],  # Last 4 digits
+    amount: Money.new(data['balance'] * 100, data['currency']),
+    is_credit: data['type'] == 'credit'
+  )
+end
+```
+
+### fetch_investments Method
+
+Implement this if the bank provides investment account information:
+
+```ruby
+def fetch_investments
+  response = get(BASE_ENDPOINT + INVESTMENTS_ENDPOINT)
+  json = JSON.parse(response)
+  json['investments'].map { |data| build_investment(data) }
+end
+```
+
+## Common Patterns
+
+### Pagination
+
+If the API uses pagination:
+
+```ruby
+def fetch_transactions_for(account, start_date:, end_date:)
+  transactions = []
+  page = 1
+  
+  loop do
+    response = get(
+      TRANSACTIONS_ENDPOINT,
+      params: {
+        account_id: account.id,
+        page: page,
+        from: start_date.strftime('%Y-%m-%d'),
+        to: end_date.strftime('%Y-%m-%d')
+      }
+    )
+    
+    json = JSON.parse(response)
+    transactions.concat(json['transactions'].map { |d| build_transaction(d, account) })
+    
+    break if json['transactions'].empty? || !json['has_more']
+    page += 1
+  end
+  
+  transactions
+end
+```
+
+### Multiple Requests
+
+If you need to make multiple API calls:
+
+```ruby
+def fetch_accounts
+  # First get account IDs
+  response = get(ACCOUNTS_ENDPOINT)
+  account_ids = JSON.parse(response)['account_ids']
+  
+  # Then get details for each account
+  account_ids.map do |id|
+    details = get("#{ACCOUNTS_ENDPOINT}/#{id}")
+    build_account(JSON.parse(details))
+  end
+end
+```
+
+### Date Formatting
+
+Different banks use different date formats:
+
+```ruby
+# ISO format (2024-01-31)
+start_date.strftime('%Y-%m-%d')
+
+# European format (31/01/2024)
+start_date.strftime('%d/%m/%Y')
+
+# American format (01/31/2024)
+start_date.strftime('%m/%d/%Y')
+
+# Timestamp
+start_date.to_time.to_i
+```
+
+## Testing Your Implementation
+
+Test each method individually:
+
+```ruby
+require 'bankscrap-mybank'
+
+# Test initialization and login
+bank = Bankscrap::MyBank::Bank.new(
+  user: 'test_user',
+  password: 'test_password'
+)
+
+# Test account fetching
+puts bank.accounts.inspect
+
+# Test transaction fetching
+account = bank.accounts.first
+transactions = account.fetch_transactions(
+  start_date: Date.today - 30,
+  end_date: Date.today
+)
+puts transactions.inspect
+```
+
+<Note>
+Use test credentials provided by the bank's sandbox environment, or use your own credentials in a development environment only.
+</Note>

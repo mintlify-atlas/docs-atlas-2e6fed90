@@ -1,0 +1,224 @@
+---
+title: 'CSV Exporter'
+description: 'Export financial data to CSV format'
+---
+
+## Overview
+
+The `BankScrap::Exporter::Csv` class provides functionality to export accounts, transactions, loans, and cards to CSV format.
+
+## Class Methods
+
+### initialize(account)
+
+Creates a new CSV exporter instance.
+
+<ParamField path="account" type="Bankscrap::Account">
+  The account associated with the data being exported (used for transaction exports)
+</ParamField>
+
+**Example:**
+
+```ruby
+exporter = BankScrap::Exporter::Csv.new(account)
+```
+
+### write_to_file(data, output)
+
+Writes data to a CSV file.
+
+<ParamField path="data" type="Array" required>
+  Array of objects to export. Supported types:
+  - `Array<Bankscrap::Transaction>`
+  - `Array<Bankscrap::Account>`
+  - `Array<Bankscrap::Loan>`
+  - `Array<Bankscrap::Card>`
+</ParamField>
+
+<ParamField path="output" type="String">
+  Output file path. Special values:
+  - `nil` - Auto-generates filename based on data type
+  - `"-"` - Outputs to stdout
+  - Custom path - Saves to specified file
+</ParamField>
+
+**Example:**
+
+```ruby
+# Export transactions to auto-generated file
+exporter.write_to_file(transactions, nil)
+# => Creates "transactions.csv"
+
+# Export to specific file
+exporter.write_to_file(transactions, 'my-transactions.csv')
+
+# Export to stdout
+exporter.write_to_file(transactions, '-')
+```
+
+## CSV Format by Data Type
+
+### Transactions
+
+**Columns:** Date, Description, Amount
+
+```csv
+Date,Description,Amount
+03/03/2026,Grocery Store,SUPERMARKET PURCHASE,-50.00 EUR
+02/03/2026,Salary Deposit,Monthly Salary,2500.00 EUR
+```
+
+**Example:**
+
+```ruby
+exporter = BankScrap::Exporter::Csv.new(account)
+exporter.write_to_file(account.transactions, 'transactions.csv')
+# => "Transactions for: Personal Checking Account (ES1234567890123456789012) exported to transactions.csv"
+```
+
+### Accounts
+
+**Columns:** Id, Iban, Name, Description, Bank, Balance
+
+```csv
+Id,Iban,Name,Description,Bank,Balance
+1234567890,ES1234567890123456789012,Main Account,Personal Checking Account,MyBank,1000.00 EUR
+```
+
+**Example:**
+
+```ruby
+exporter = BankScrap::Exporter::Csv.new(nil)
+exporter.write_to_file(bank.accounts, 'accounts.csv')
+# => "Accounts exported to accounts.csv"
+```
+
+### Loans
+
+**Columns:** Id, Name, Description, Amount
+
+```csv
+Id,Name,Description,Amount
+LOAN123,Mortgage,Home Mortgage Loan,250000.00 EUR
+```
+
+**Example:**
+
+```ruby
+exporter = BankScrap::Exporter::Csv.new(nil)
+exporter.write_to_file(bank.loans, 'loans.csv')
+# => "Accounts exported to loans.csv"
+```
+
+### Cards
+
+**Columns:** Id, Name, Description, Pan, Amount, Avaliable, Is_credit
+
+```csv
+Id,Name,Description,Pan,Amount,Avaliable,Is_credit
+CARD123,Visa Gold,Visa Gold Credit Card,**** **** **** 1234,1500.00 EUR,3500.00 EUR,true
+```
+
+**Example:**
+
+```ruby
+exporter = BankScrap::Exporter::Csv.new(nil)
+exporter.write_to_file(bank.cards, 'cards.csv')
+# => "Accounts exported to cards.csv"
+```
+
+## Usage Examples
+
+### Export All Account Data
+
+```ruby
+bank = Bankscrap::MyBank.new(user: 'username', password: 'password')
+account = bank.accounts.first
+
+# Export transactions
+transactions_exporter = BankScrap::Exporter::Csv.new(account)
+transactions_exporter.write_to_file(account.transactions, 'transactions.csv')
+
+# Export accounts
+accounts_exporter = BankScrap::Exporter::Csv.new(nil)
+accounts_exporter.write_to_file(bank.accounts, 'accounts.csv')
+
+# Export loans (if available)
+if bank.loans
+  loans_exporter = BankScrap::Exporter::Csv.new(nil)
+  loans_exporter.write_to_file(bank.loans, 'loans.csv')
+end
+
+# Export cards (if available)
+if bank.cards
+  cards_exporter = BankScrap::Exporter::Csv.new(nil)
+  cards_exporter.write_to_file(bank.cards, 'cards.csv')
+end
+```
+
+### Export to Standard Output
+
+```ruby
+# Useful for piping to other commands
+exporter = BankScrap::Exporter::Csv.new(account)
+exporter.write_to_file(account.transactions, '-')
+```
+
+### Export with Date Range
+
+```ruby
+account = bank.accounts.first
+
+# Fetch transactions for specific period
+transactions = account.fetch_transactions(
+  start_date: Date.new(2026, 1, 1),
+  end_date: Date.new(2026, 3, 31)
+)
+
+# Export filtered transactions
+exporter = BankScrap::Exporter::Csv.new(account)
+exporter.write_to_file(transactions, 'q1-2026-transactions.csv')
+```
+
+### Auto-Generated Filenames
+
+When `output` is `nil`, the exporter generates filenames based on data type:
+
+- Transactions: `transactions.json` (note: typo in source code uses .json instead of .csv)
+- Accounts: `accounts.json`
+- Loans: `loans.json`
+- Cards: `cards.json`
+
+```ruby
+exporter = BankScrap::Exporter::Csv.new(account)
+exporter.write_to_file(account.transactions, nil)
+# Creates a file with auto-generated name
+```
+
+## Implementation Details
+
+### Data Type Detection
+
+The exporter automatically detects the data type using the `check_array_class` method:
+
+```ruby
+exporter.check_array_class(data, Bankscrap::Transaction)
+# => true if all items are Transaction objects
+```
+
+### Array Conversion
+
+Each object's `to_a` method is called to convert it to array format for CSV export:
+
+- `Transaction#to_a` => `[id, formatted_date, description, description_detail, amount]`
+- `Account#to_a` => `[id, iban, name, description, balance]`
+- `Loan#to_a` => `[id, name, description, amount]`
+- `Card#to_a` => `[id, name, description, pan, amount, avaliable, is_credit]`
+
+## CLI Integration
+
+The CSV exporter is used by the BankScrap CLI when the `--format=csv` option is specified:
+
+```bash
+bankscrap balance MyBank --credentials=user:username,password:secret --format=csv
+```

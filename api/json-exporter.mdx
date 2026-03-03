@@ -1,0 +1,324 @@
+---
+title: 'JSON Exporter'
+description: 'Export financial data to JSON format'
+---
+
+## Overview
+
+The `BankScrap::Exporter::Json` class provides functionality to export accounts, transactions, loans, and cards to JSON format.
+
+## Class Methods
+
+### initialize(account)
+
+Creates a new JSON exporter instance.
+
+<ParamField path="account" type="Bankscrap::Account">
+  The account associated with the data being exported (used for transaction exports)
+</ParamField>
+
+**Example:**
+
+```ruby
+exporter = BankScrap::Exporter::Json.new(account)
+```
+
+### write_to_file(data, output)
+
+Writes data to a JSON file with pretty formatting.
+
+<ParamField path="data" type="Array" required>
+  Array of objects to export. Supported types:
+  - `Array<Bankscrap::Transaction>`
+  - `Array<Bankscrap::Account>`
+  - `Array<Bankscrap::Loan>`
+  - `Array<Bankscrap::Card>`
+</ParamField>
+
+<ParamField path="output" type="String">
+  Output file path. Special values:
+  - `nil` - Auto-generates filename based on data type
+  - `"-"` - Outputs to stdout (/dev/stdout)
+  - Custom path - Saves to specified file
+</ParamField>
+
+**Example:**
+
+```ruby
+# Export transactions to auto-generated file
+exporter.write_to_file(transactions, nil)
+# => Creates "transactions.json"
+
+# Export to specific file
+exporter.write_to_file(transactions, 'my-transactions.json')
+
+# Export to stdout
+exporter.write_to_file(transactions, '-')
+```
+
+## JSON Format by Data Type
+
+### Transactions
+
+```json
+{
+  "account": {
+    "description": "Personal Checking Account",
+    "iban": "ES1234567890123456789012"
+  },
+  "transactions": [
+    {
+      "date": "03/03/2026",
+      "description": "Grocery Store",
+      "amount": "-50.00 EUR"
+    },
+    {
+      "date": "02/03/2026",
+      "description": "Salary Deposit",
+      "amount": "2500.00 EUR"
+    }
+  ]
+}
+```
+
+**Example:**
+
+```ruby
+exporter = BankScrap::Exporter::Json.new(account)
+exporter.write_to_file(account.transactions, 'transactions.json')
+# => "Transactions for: Personal Checking Account (ES1234567890123456789012) exported to transactions.json"
+```
+
+### Accounts
+
+```json
+{
+  "accounts": [
+    {
+      "iban": "ES1234567890123456789012",
+      "name": "Main Account",
+      "description": "Personal Checking Account",
+      "amount": "1000.00 EUR"
+    }
+  ]
+}
+```
+
+**Example:**
+
+```ruby
+exporter = BankScrap::Exporter::Json.new(nil)
+exporter.write_to_file(bank.accounts, 'accounts.json')
+# => "Accounts exported to accounts.json"
+```
+
+### Loans
+
+```json
+{
+  "loans": [
+    {
+      "id": "LOAN123",
+      "name": "Mortgage",
+      "description": "Home Mortgage Loan",
+      "amount": "250000.00 EUR"
+    }
+  ]
+}
+```
+
+**Example:**
+
+```ruby
+exporter = BankScrap::Exporter::Json.new(nil)
+exporter.write_to_file(bank.loans, 'loans.json')
+# => "Loans exported to loans.json"
+```
+
+### Cards
+
+```json
+{
+  "cards": [
+    {
+      "id": "CARD123",
+      "name": "Visa Gold",
+      "description": "Visa Gold Credit Card",
+      "pan": "**** **** **** 1234",
+      "amount": "1500.00 EUR",
+      "avaliable": "3500.00 EUR",
+      "isCredit": true
+    }
+  ]
+}
+```
+
+**Example:**
+
+```ruby
+exporter = BankScrap::Exporter::Json.new(nil)
+exporter.write_to_file(bank.cards, 'cards.json')
+# => "Cards exported to cards.json"
+```
+
+## Usage Examples
+
+### Export All Account Data
+
+```ruby
+bank = Bankscrap::MyBank.new(user: 'username', password: 'password')
+account = bank.accounts.first
+
+# Export transactions
+transactions_exporter = BankScrap::Exporter::Json.new(account)
+transactions_exporter.write_to_file(account.transactions, 'transactions.json')
+
+# Export accounts
+accounts_exporter = BankScrap::Exporter::Json.new(nil)
+accounts_exporter.write_to_file(bank.accounts, 'accounts.json')
+
+# Export loans (if available)
+if bank.loans
+  loans_exporter = BankScrap::Exporter::Json.new(nil)
+  loans_exporter.write_to_file(bank.loans, 'loans.json')
+end
+
+# Export cards (if available)
+if bank.cards
+  cards_exporter = BankScrap::Exporter::Json.new(nil)
+  cards_exporter.write_to_file(bank.cards, 'cards.json')
+end
+```
+
+### Export to Standard Output
+
+```ruby
+# Useful for piping to other commands or processing
+exporter = BankScrap::Exporter::Json.new(account)
+exporter.write_to_file(account.transactions, '-')
+```
+
+### Export with Date Range
+
+```ruby
+account = bank.accounts.first
+
+# Fetch transactions for specific period
+transactions = account.fetch_transactions(
+  start_date: Date.new(2026, 1, 1),
+  end_date: Date.new(2026, 3, 31)
+)
+
+# Export filtered transactions
+exporter = BankScrap::Exporter::Json.new(account)
+exporter.write_to_file(transactions, 'q1-2026-transactions.json')
+```
+
+### Parse Exported JSON
+
+```ruby
+require 'json'
+
+# Read and parse exported JSON file
+data = JSON.parse(File.read('transactions.json'))
+
+puts "Account: #{data['account']['description']}"
+puts "IBAN: #{data['account']['iban']}"
+puts "Transactions: #{data['transactions'].count}"
+
+data['transactions'].each do |transaction|
+  puts "#{transaction['date']}: #{transaction['description']} - #{transaction['amount']}"
+end
+```
+
+### Auto-Generated Filenames
+
+When `output` is `nil`, the exporter generates filenames based on data type:
+
+- Transactions: `transactions.json`
+- Accounts: `accounts.json`
+- Loans: `loans.json`
+- Cards: `cards.json`
+
+```ruby
+exporter = BankScrap::Exporter::Json.new(account)
+exporter.write_to_file(account.transactions, nil)
+# Creates "transactions.json"
+```
+
+## Implementation Details
+
+### Pretty Printing
+
+JSON output is formatted with `JSON.pretty_generate` for human readability:
+
+```ruby
+JSON.pretty_generate(json_hash) + "\n"
+```
+
+### Data Type Detection
+
+The exporter automatically detects the data type using the `check_array_class` method:
+
+```ruby
+exporter.check_array_class(data, Bankscrap::Transaction)
+# => true if all items are Transaction objects
+```
+
+### Array to Hash Conversion
+
+Each object is converted to an array using `to_a`, then mapped to a hash:
+
+**Transaction mapping:**
+```ruby
+array = transaction.to_a  # [id, date, description, detail, amount]
+hash = { 
+  date: array[0],         # Note: array[0] is id, array[1] is formatted_date in to_a
+  description: array[1], 
+  amount: array[2] 
+}
+```
+
+**Account mapping:**
+```ruby
+array = account.to_a  # [id, iban, name, description, balance]
+hash = { 
+  iban: array[1], 
+  name: array[2], 
+  description: array[3], 
+  amount: array[4] 
+}
+```
+
+**Loan mapping:**
+```ruby
+array = loan.to_a  # [id, name, description, amount]
+hash = { 
+  id: array[0], 
+  name: array[1], 
+  description: array[2], 
+  amount: array[3] 
+}
+```
+
+**Card mapping:**
+```ruby
+array = card.to_a  # [id, name, description, pan, amount, avaliable, is_credit]
+hash = { 
+  id: array[0], 
+  name: array[1], 
+  description: array[2], 
+  pan: array[3], 
+  amount: array[4], 
+  avaliable: array[5], 
+  isCredit: array[6]  # Note: camelCase in JSON output
+}
+```
+
+## CLI Integration
+
+The JSON exporter is used by the BankScrap CLI when the `--format=json` option is specified:
+
+```bash
+bankscrap balance MyBank --credentials=user:username,password:secret --format=json
+```

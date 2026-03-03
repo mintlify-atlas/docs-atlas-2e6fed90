@@ -1,0 +1,321 @@
+---
+title: 'Fetching Data'
+description: 'Fetching accounts, transactions, cards, loans, and investments'
+---
+
+## Overview
+
+After initializing a bank connection, BankScrap automatically fetches accounts and other available data. You can also fetch transactions on-demand with custom date ranges.
+
+## Accounts
+
+### Automatic Fetching
+
+Accounts are automatically fetched during initialization:
+
+```ruby
+require 'bankscrap-bbva'
+bank = Bankscrap::BBVA::Bank.new(
+  user: YOUR_USER,
+  password: YOUR_PASSWORD
+)
+
+# Accounts are already available
+bank.accounts
+# => [#<Bankscrap::Account>, #<Bankscrap::Account>, ...]
+```
+
+### Account Details
+
+Each account object contains:
+
+```ruby
+account = bank.accounts.first
+
+account.id                 # => "1234567890"
+account.name               # => "Main Account"
+account.iban               # => "ES12 3456 7890 1234 5678 9012"
+account.bic                # => "BBVAESMMXXX"
+account.description        # => "CUENTA CORRIENTE"
+account.balance            # => #<Money fractional:125000 currency:EUR>
+account.available_balance  # => #<Money fractional:120000 currency:EUR>
+```
+
+### Finding Accounts
+
+Find a specific account by IBAN:
+
+```ruby
+account = bank.account_with_iban('ES12 3456 7890 1234 5678 9012')
+# Spaces in IBAN are optional
+account = bank.account_with_iban('ES1234567890123456789012')
+```
+
+## Transactions
+
+### Default Transaction Fetching
+
+Fetch the last 2 years of transactions (default behavior):
+
+```ruby
+account = bank.accounts.first
+transactions = account.transactions
+# => [#<Bankscrap::Transaction>, #<Bankscrap::Transaction>, ...]
+```
+
+<Note>
+The first call to `account.transactions` fetches data from the bank. Subsequent calls return cached data unless you explicitly fetch again.
+</Note>
+
+### Custom Date Range
+
+Fetch transactions for a specific period:
+
+```ruby
+account = bank.accounts.first
+
+# Last year
+transactions = account.fetch_transactions(
+  start_date: Date.today - 1.year,
+  end_date: Date.today
+)
+
+# Last month
+transactions = account.fetch_transactions(
+  start_date: Date.today - 1.month,
+  end_date: Date.today
+)
+
+# Specific date range
+transactions = account.fetch_transactions(
+  start_date: Date.new(2023, 1, 1),
+  end_date: Date.new(2023, 12, 31)
+)
+
+# Update cached transactions
+account.transactions = transactions
+```
+
+### Transaction Properties
+
+Each transaction object contains:
+
+```ruby
+transaction = transactions.first
+
+transaction.id                  # => "TXN123456"
+transaction.amount              # => #<Money fractional:-5000 currency:EUR>
+transaction.description         # => "Purchase at Store"
+transaction.description_detail  # => "Full transaction details"
+transaction.effective_date      # => #<Date: 2024-01-15>
+transaction.operation_date      # => #<Date: 2024-01-14>
+transaction.balance             # => #<Money fractional:95000 currency:EUR>
+transaction.currency            # => #<Money::Currency id: eur>
+```
+
+### Filtering Transactions
+
+Filter transactions by amount, date, or description:
+
+```ruby
+# Positive transactions (income)
+income = transactions.select { |t| t.amount.positive? }
+
+# Negative transactions (expenses)
+expenses = transactions.select { |t| t.amount.negative? }
+
+# Transactions above a certain amount
+large = transactions.select { |t| t.amount.abs > Money.new(10000, 'EUR') }
+
+# Transactions containing specific text
+shopping = transactions.select { |t| t.description.include?('AMAZON') }
+
+# Transactions in a specific month
+january = transactions.select do |t|
+  t.effective_date.month == 1 && t.effective_date.year == 2024
+end
+```
+
+## Cards
+
+### Fetching Cards
+
+Cards are automatically fetched if the bank adapter supports them:
+
+```ruby
+bank.cards
+# => [#<Bankscrap::Card>, #<Bankscrap::Card>, ...]
+
+card = bank.cards.first
+```
+
+<Warning>
+Not all bank adapters support cards. Check your specific adapter's documentation.
+</Warning>
+
+### Card Properties
+
+```ruby
+card.id          # => "CARD123"
+card.name        # => "Visa Gold"
+card.pan         # => "**** **** **** 1234"
+card.amount      # => #<Money fractional:50000 currency:EUR>
+card.avaliable   # => #<Money fractional:45000 currency:EUR>
+card.is_credit   # => true
+card.description # => "VISA GOLD CREDIT CARD"
+```
+
+## Loans
+
+### Fetching Loans
+
+Loans are automatically fetched if the bank adapter supports them:
+
+```ruby
+bank.loans
+# => [#<Bankscrap::Loan>, #<Bankscrap::Loan>, ...]
+
+loan = bank.loans.first
+```
+
+### Loan Properties
+
+```ruby
+loan.id          # => "LOAN123"
+loan.name        # => "Mortgage"
+loan.amount      # => #<Money fractional:15000000 currency:EUR>
+loan.description # => "Home Mortgage Loan"
+loan.currency    # => #<Money::Currency id: eur>
+```
+
+## Investments
+
+### Fetching Investments
+
+Investments are automatically fetched if the bank adapter supports them:
+
+```ruby
+bank.investments
+# => [#<Bankscrap::Investment>, #<Bankscrap::Investment>, ...]
+
+investment = bank.investments.first
+```
+
+### Investment Properties
+
+```ruby
+investment.id        # => "INV123"
+investment.name      # => "Index Fund"
+investment.balance   # => 25000.50
+investment.currency  # => "EUR"
+investment.investment # => Additional investment details
+```
+
+## Working with Money Objects
+
+All monetary values use the Money gem:
+
+```ruby
+account.balance.to_f
+# => 1250.0
+
+account.balance.format
+# => "€1,250.00"
+
+account.balance.cents
+# => 125000
+
+# Arithmetic operations
+total = transactions.sum { |t| t.amount }
+# => #<Money fractional:50000 currency:EUR>
+
+# Comparisons
+if transaction.amount > Money.new(10000, 'EUR')
+  puts "Large transaction!"
+end
+```
+
+## Raw Data Access
+
+Some objects provide access to raw API responses:
+
+```ruby
+# Access raw bank API data if needed
+account.raw_data
+card.raw_data
+loan.raw_data
+```
+
+This is useful for accessing bank-specific fields not covered by the standard API.
+
+## Performance Tips
+
+<Tip>
+**Cache transactions**: The first call to `account.transactions` is cached. Fetch with custom dates when needed:
+
+```ruby
+# Initial fetch (cached)
+transactions = account.transactions
+
+# Later, fetch specific range
+recent = account.fetch_transactions(
+  start_date: Date.today - 7.days,
+  end_date: Date.today
+)
+```
+</Tip>
+
+## Example: Complete Data Fetch
+
+Here's a complete example fetching all available data:
+
+```ruby
+require 'bankscrap-bbva'
+
+bank = Bankscrap::BBVA::Bank.new(
+  user: ENV['BANKSCRAP_BBVA_USER'],
+  password: ENV['BANKSCRAP_BBVA_PASSWORD']
+)
+
+# Fetch all data
+bank.accounts.each do |account|
+  puts "Account: #{account.name}"
+  puts "Balance: #{account.balance.format}"
+  
+  # Get recent transactions
+  transactions = account.fetch_transactions(
+    start_date: Date.today - 30.days,
+    end_date: Date.today
+  )
+  
+  puts "Transactions: #{transactions.count}"
+  puts "---"
+end
+
+# Cards
+if bank.cards.any?
+  puts "\nCards:"
+  bank.cards.each do |card|
+    puts "#{card.name}: #{card.amount.format}"
+  end
+end
+
+# Loans
+if bank.loans.any?
+  puts "\nLoans:"
+  bank.loans.each do |loan|
+    puts "#{loan.name}: #{loan.amount.format}"
+  end
+end
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Ruby API" icon="code" href="/library/ruby-api">
+    Learn about initialization and configuration
+  </Card>
+  <Card title="Error Handling" icon="shield-exclamation" href="/library/error-handling">
+    Handle exceptions and errors properly
+  </Card>
+</CardGroup>

@@ -1,0 +1,247 @@
+---
+title: 'Configuration Options'
+description: 'Global configuration settings for BankScrap'
+---
+
+## Overview
+
+BankScrap provides global configuration options that affect how the library formats data and displays information.
+
+## Money Formatting
+
+BankScrap uses the [Money gem](https://github.com/RubyMoney/money) for handling currency amounts. The default formatting rules are configured globally.
+
+### Default Formatting Rules
+
+```ruby
+Money.default_formatting_rules = { symbol_position: :after }
+```
+
+This configuration sets the currency symbol to appear after the amount.
+
+**Examples:**
+
+```ruby
+# With default configuration (symbol after)
+amount = Money.new(10000, 'EUR')
+amount.format
+# => "100.00 €"
+
+# Default without configuration would be:
+# => "€100.00"
+```
+
+## Internationalization (I18n)
+
+BankScrap loads locale files for internationalization support.
+
+### Locale Files
+
+```ruby
+I18n.load_path += Dir.glob(File.expand_path('../locale/*.yml', __FILE__))
+```
+
+Locale files are loaded from the `lib/bankscrap/locale/` directory.
+
+## Runtime Configuration
+
+BankScrap provides several runtime configuration options accessible through the `Bankscrap` module.
+
+### Debug Mode
+
+Enable debug logging to see detailed HTTP requests and responses.
+
+**Usage:**
+
+```ruby
+Bankscrap.debug = true
+
+bank = Bankscrap::MyBank.new(
+  user: 'username',
+  password: 'password'
+)
+# => Logs HTTP requests to STDOUT
+```
+
+**In Bank class (lib/bankscrap/bank.rb:95):**
+```ruby
+mechanize.log = Logger.new(STDOUT) if Bankscrap.debug
+```
+
+### Logging
+
+Enable informational logging for operations.
+
+**Usage:**
+
+```ruby
+Bankscrap.log = true
+
+# Now internal log messages will be displayed
+```
+
+**In Bank class (lib/bankscrap/bank.rb:106):**
+```ruby
+def log(msg)
+  puts msg if Bankscrap.log
+end
+```
+
+### Proxy Configuration
+
+Configure HTTP proxy for all bank connections.
+
+**Usage:**
+
+```ruby
+Bankscrap.proxy = {
+  host: 'proxy.example.com',
+  port: 8080
+}
+
+bank = Bankscrap::MyBank.new(
+  user: 'username',
+  password: 'password'
+)
+# => All HTTP requests go through the proxy
+```
+
+**In Bank class (lib/bankscrap/bank.rb:97-99):**
+```ruby
+if Bankscrap.proxy
+  mechanize.set_proxy Bankscrap.proxy[:host], Bankscrap.proxy[:port]
+end
+```
+
+## Complete Configuration Example
+
+```ruby
+require 'bankscrap'
+
+# Enable debug logging
+Bankscrap.debug = true
+
+# Enable informational logging
+Bankscrap.log = true
+
+# Configure proxy
+Bankscrap.proxy = {
+  host: 'proxy.company.com',
+  port: 3128
+}
+
+# Customize money formatting (optional)
+Money.default_formatting_rules = {
+  symbol_position: :before,
+  thousands_separator: ',',
+  decimal_mark: '.'
+}
+
+# Initialize bank with configuration applied
+bank = Bankscrap::MyBank.new(
+  user: ENV['BANK_USER'],
+  password: ENV['BANK_PASSWORD']
+)
+```
+
+## Money Formatting Customization
+
+You can override the default Money formatting rules:
+
+### Available Formatting Options
+
+```ruby
+Money.default_formatting_rules = {
+  # Symbol position (:before or :after)
+  symbol_position: :after,
+  
+  # Thousands separator
+  thousands_separator: '.',
+  
+  # Decimal mark
+  decimal_mark: ',',
+  
+  # Number of decimal places
+  decimal_places: 2,
+  
+  # Whether to show the currency symbol
+  symbol: true,
+  
+  # Whether to use HTML entity for symbol
+  html_entity: false,
+  
+  # Spacing between amount and symbol
+  symbol_space: true
+}
+```
+
+### Format Examples
+
+```ruby
+amount = Money.new(123456, 'EUR')
+
+# Default BankScrap format (symbol after)
+Money.default_formatting_rules = { symbol_position: :after }
+amount.format
+# => "1,234.56 €"
+
+# European format
+Money.default_formatting_rules = {
+  symbol_position: :after,
+  thousands_separator: '.',
+  decimal_mark: ','
+}
+amount.format
+# => "1.234,56 €"
+
+# US format
+Money.default_formatting_rules = {
+  symbol_position: :before,
+  thousands_separator: ',',
+  decimal_mark: '.'
+}
+amount.format
+# => "$1,234.56"
+```
+
+## Environment-Based Configuration
+
+```ruby
+# config/bankscrap.rb
+require 'bankscrap'
+
+if ENV['RAILS_ENV'] == 'development'
+  Bankscrap.debug = true
+  Bankscrap.log = true
+end
+
+if ENV['HTTP_PROXY']
+  proxy_uri = URI.parse(ENV['HTTP_PROXY'])
+  Bankscrap.proxy = {
+    host: proxy_uri.host,
+    port: proxy_uri.port
+  }
+end
+```
+
+## Configuration Methods Summary
+
+<ResponseField name="Bankscrap.debug" type="Boolean" default="false">
+  Enable debug logging for HTTP requests
+</ResponseField>
+
+<ResponseField name="Bankscrap.log" type="Boolean" default="false">
+  Enable informational logging
+</ResponseField>
+
+<ResponseField name="Bankscrap.proxy" type="Hash" default="nil">
+  HTTP proxy configuration with `:host` and `:port` keys
+</ResponseField>
+
+<ResponseField name="Money.default_formatting_rules" type="Hash">
+  Money gem formatting options (symbol position, separators, etc.)
+</ResponseField>
+
+<ResponseField name="I18n.load_path" type="Array">
+  Paths to locale files for internationalization
+</ResponseField>

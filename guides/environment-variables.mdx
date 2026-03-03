@@ -1,0 +1,132 @@
+---
+title: 'Environment Variables'
+description: 'Configure credentials using environment variables'
+---
+
+BankScrap allows you to configure your bank credentials using environment variables instead of passing them as command-line arguments every time.
+
+## Variable Pattern
+
+Environment variables follow this naming pattern:
+
+```bash
+BANKSCRAP_[BANK_NAME]_[CREDENTIAL]
+```
+
+Where:
+- `BANK_NAME` is the name of your bank adapter in uppercase
+- `CREDENTIAL` is the specific credential field (USER, PASSWORD, etc.)
+
+## Common Examples
+
+### BBVA
+
+```bash
+export BANKSCRAP_BBVA_USER=YOUR_BANK_USER
+export BANKSCRAP_BBVA_PASSWORD=YOUR_BANK_PASSWORD
+```
+
+### BBVA Net Cash
+
+For multi-word bank names, use underscores:
+
+```bash
+export BANKSCRAP_BBVA_NET_CASH_USER=YOUR_BANK_USER
+export BANKSCRAP_BBVA_NET_CASH_PASSWORD=YOUR_BANK_PASSWORD
+```
+
+### ING Direct
+
+ING requires additional credentials like DNI and birthday:
+
+```bash
+export BANKSCRAP_ING_DNI=YOUR_DNI
+export BANKSCRAP_ING_PASSWORD=YOUR_BANK_PASSWORD
+export BANKSCRAP_ING_BIRTHDAY=01/01/1980
+```
+
+## Setting Environment Variables
+
+### Bash/Zsh
+
+Add the export statements to your `~/.bashrc` or `~/.zshrc` file:
+
+```bash
+# Add to ~/.bashrc or ~/.zshrc
+export BANKSCRAP_BBVA_USER=YOUR_BANK_USER
+export BANKSCRAP_BBVA_PASSWORD=YOUR_BANK_PASSWORD
+```
+
+Then reload your configuration:
+
+```bash
+source ~/.bashrc
+# or
+source ~/.zshrc
+```
+
+### Using .env Files
+
+For application development, you can use a `.env` file with gems like `dotenv`:
+
+```bash
+# .env
+BANKSCRAP_BBVA_USER=YOUR_BANK_USER
+BANKSCRAP_BBVA_PASSWORD=YOUR_BANK_PASSWORD
+```
+
+<Warning>
+Never commit `.env` files containing credentials to version control. Add `.env` to your `.gitignore` file.
+</Warning>
+
+## How It Works
+
+When you initialize a bank adapter, BankScrap automatically looks for environment variables if credentials aren't explicitly provided:
+
+```ruby lib/bankscrap/bank.rb:18
+self.class::REQUIRED_CREDENTIALS.each do |field|
+  value = credentials.with_indifferent_access[field] || ENV["#{env_vars_prefix}_#{field.upcase}"]
+  raise MissingCredential, "Missing credential: '#{field}' if value.blank?
+  instance_variable_set("@#{field}", value)
+end
+```
+
+## Benefits
+
+<CardGroup cols={2}>
+  <Card title="Security" icon="shield">
+    Keep credentials out of your command history and code
+  </Card>
+  
+  <Card title="Convenience" icon="clock">
+    No need to type credentials with every command
+  </Card>
+  
+  <Card title="Automation" icon="robot">
+    Simplify scripts and automated tasks
+  </Card>
+  
+  <Card title="Flexibility" icon="sliders">
+    Switch between different accounts easily
+  </Card>
+</CardGroup>
+
+## Usage with Environment Variables
+
+Once configured, you can use BankScrap commands without the `--credentials` flag:
+
+```bash
+# Instead of:
+bankscrap balance BBVA --credentials=user:YOUR_USER password:YOUR_PASSWORD
+
+# Simply use:
+bankscrap balance BBVA
+```
+
+The same applies to the Ruby API:
+
+```ruby
+# Credentials will be read from environment variables
+require 'bankscrap-bbva'
+bbva = Bankscrap::BBVA::Bank.new
+```

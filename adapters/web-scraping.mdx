@@ -1,0 +1,413 @@
+---
+title: 'Web Scraping with Mechanize'
+description: 'Using Mechanize to scrape bank websites when no API is available'
+---
+
+When a bank doesn't provide a public API, you can use web scraping to extract account data. BankScrap includes Mechanize for this purpose.
+
+## Mechanize Overview
+
+Mechanize is a Ruby library for automating website interaction. The `Bankscrap::Bank` base class provides a pre-configured Mechanize instance.
+
+### HTTP Client
+
+The base class initializes Mechanize with sensible defaults:
+
+```ruby
+@http = Mechanize.new do |mechanize|
+  mechanize.user_agent = 'Mozilla/5.0 (Linux; Android 4.2.1; en-us; Nexus 4 Build/JOP40D) ...'
+  mechanize.agent.http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+  mechanize.log = Logger.new(STDOUT) if Bankscrap.debug
+  
+  if Bankscrap.proxy
+    mechanize.set_proxy Bankscrap.proxy[:host], Bankscrap.proxy[:port]
+  end
+end
+```
+
+<Note>
+The user agent is set to mimic a mobile device. Banks often have simpler HTML on mobile sites.
+</Note>
+
+## Basic HTTP Methods
+
+The base class provides convenience methods:
+
+### GET Requests
+
+```ruby
+# Simple GET
+response = get('https://www.bank.com/accounts')
+
+# GET with parameters
+response = get(
+  'https://www.bank.com/transactions',
+  params: { account_id: '12345', page: 1 }
+)
+
+# GET with referer
+response = get(
+  'https://www.bank.com/details',
+  referer: 'https://www.bank.com/accounts'
+)
+```
+
+### POST Requests
+
+```ruby
+# POST with form fields
+response = post(
+  'https://www.bank.com/login',
+  fields: {
+    username: @user,
+    password: @password,
+    submit: 'Login'
+  }
+)
+
+# POST with JSON
+response = post(
+  'https://api.bank.com/accounts',
+  fields: { user_id: @user }.to_json
+)
+```
+
+### PUT Requests
+
+```ruby
+response = put(
+  'https://api.bank.com/settings',
+  fields: { notification: true }.to_json
+)
+```
+
+## Parsing HTML
+
+Mechanize returns Nokogiri-parsed HTML that you can query:
+
+```ruby
+def fetch_accounts
+  page = @http.get(BASE_ENDPOINT + '/accounts')
+  
+  # Parse HTML with CSS selectors
+  page.search('.account-row').map do |row|
+    build_account_from_html(row)
+  end
+end
+
+private
+
+def build_account_from_html(row)
+  ::Bankscrap::Account.new(
+    bank: self,
+    id: row.at_css('.account-id').text.strip,
+    name: row.at_css('.account-name').text.strip,
+    balance: parse_money(row.at_css('.balance').text),
+    available_balance: parse_money(row.at_css('.available').text),
+    iban: row.at_css('.iban').text.strip
+  )
+end
+
+def parse_money(text)
+  # "1,234.56 EUR" -> Money object
+  amount = text.gsub(/[^0-9.-]/, '').to_f
+  currency = text.match(/[A-Z]{3}/)&.to_s || 'EUR'
+  Money.new(amount * 100, currency)
+end
+```
+
+## Working with Forms
+
+### Submitting Forms
+
+```ruby
+def login
+  # Get the login page
+  page = @http.get(BASE_ENDPOINT + '/login')
+  
+  # Find the login form
+  form = page.forms.first
+  
+  # Fill in fields
+  form['username'] = @user
+  form['password'] = @password
+  
+  # Submit the form
+  result = form.submit
+end
+```
+
+### Finding Forms by Name or Action
+
+```ruby
+# Find form by name attribute
+form = page.form_with(name: 'login_form')
+
+# Find form by action attribute
+form = page.form_with(action: '/auth/login')
+
+# Find form by ID
+form = page.form_with(id: 'main-form')
+```
+
+### Working with Form Fields
+
+```ruby
+# Text fields
+form.field_with(name: 'username').value = @user
+
+# Checkboxes
+form.checkbox_with(name: 'remember_me').check
+
+# Radio buttons
+form.radiobutton_with(value: 'personal').check
+
+# Select dropdowns
+form.field_with(name: 'account_type').value = 'checking'
+```
+
+## Session and Cookie Management
+
+### Initializing Cookies
+
+Visit a page to initialize session cookies:
+
+```ruby
+def login
+  # Visit homepage to get session cookie
+  initialize_cookie(BASE_ENDPOINT)
+  
+  # Now submit login form
+  page = @http.get(BASE_ENDPOINT + '/login')
+  form = page.forms.first
+  form['user'] = @user
+  form['password'] = @password
+  form.submit
+end
+```
+
+### Manual Cookie Management
+
+```ruby
+# Access cookies
+@http.cookie_jar.cookies
+
+# Add a cookie
+cookie = Mechanize::Cookie.new('session_id', 'abc123')
+cookie.domain = '.bank.com'
+cookie.path = '/'
+@http.cookie_jar.add(cookie)
+```
+
+## Header Management
+
+### Setting Custom Headers
+
+```ruby
+def initialize(credentials = {})
+  super do
+    # Set headers that persist for all requests
+    add_headers(
+      'Accept' => 'text/html,application/xhtml+xml',
+      'Accept-Language' => 'en-US,en;q=0.9',
+      'Accept-Encoding' => 'gzip, deflate, br'
+    )
+  end
+end
+```
+
+### Temporary Headers
+
+```ruby
+def fetch_accounts
+  # Use different headers just for this request
+  with_headers('X-Requested-With' => 'XMLHttpRequest') do
+    response = get(ACCOUNTS_ENDPOINT)
+    JSON.parse(response)
+  end
+end
+```
+
+## Following Links
+
+```ruby
+def fetch_account_details(account_id)
+  page = @http.get(ACCOUNTS_ENDPOINT)
+  
+  # Find and click a link
+  link = page.link_with(text: 'View Details')
+  details_page = link.click
+  
+  # Or find by href
+  link = page.link_with(href: /account\/#{account_id}/)
+  details_page = link.click
+end
+```
+
+## Handling JavaScript-Heavy Sites
+
+<Warning>
+Mechanize cannot execute JavaScript. For JavaScript-heavy sites, you may need to reverse engineer the API calls the JavaScript makes.
+</Warning>
+
+### Inspect Network Traffic
+
+<Steps>
+  <Step title="Open browser DevTools">
+    Open the bank's website in Chrome/Firefox and open DevTools (F12).
+  </Step>
+
+  <Step title="Go to Network tab">
+    Click the Network tab and filter by XHR or Fetch requests.
+  </Step>
+
+  <Step title="Perform actions">
+    Log in and navigate through the site, watching what API calls are made.
+  </Step>
+
+  <Step title="Copy as cURL">
+    Right-click on API requests and select "Copy as cURL" to see headers and payloads.
+  </Step>
+
+  <Step title="Replicate in adapter">
+    Use the same endpoints, headers, and parameters in your adapter.
+  </Step>
+</Steps>
+
+## Example: Complete Web Scraping Adapter
+
+```ruby
+module Bankscrap
+  module WebBank
+    class Bank < ::Bankscrap::Bank
+      BASE_ENDPOINT = 'https://online.webbank.com'.freeze
+      REQUIRED_CREDENTIALS = %i[user password].freeze
+
+      private
+
+      def login
+        # Get login page to initialize session
+        initialize_cookie(BASE_ENDPOINT)
+        
+        # Submit login form
+        login_page = @http.get(BASE_ENDPOINT + '/login')
+        form = login_page.form_with(name: 'loginForm')
+        form['username'] = @user
+        form['password'] = @password
+        
+        result = form.submit
+        
+        # Check if login was successful
+        raise 'Login failed' if result.search('.error-message').any?
+      end
+
+      def fetch_accounts
+        page = @http.get(BASE_ENDPOINT + '/accounts')
+        
+        page.search('.account-card').map do |card|
+          ::Bankscrap::Account.new(
+            bank: self,
+            id: card['data-account-id'],
+            name: card.at_css('.account-name').text.strip,
+            balance: parse_money(card.at_css('.balance').text),
+            available_balance: parse_money(card.at_css('.available').text),
+            iban: card.at_css('.iban').text.strip,
+            description: card.at_css('.account-type').text.strip
+          )
+        end
+      end
+
+      def fetch_transactions_for(account, start_date:, end_date:)
+        page = @http.get(
+          BASE_ENDPOINT + '/transactions',
+          params: {
+            account: account.id,
+            from: start_date.strftime('%d/%m/%Y'),
+            to: end_date.strftime('%d/%m/%Y')
+          }
+        )
+        
+        page.search('.transaction-row').map do |row|
+          ::Bankscrap::Transaction.new(
+            account: account,
+            id: row['data-transaction-id'],
+            amount: parse_money(row.at_css('.amount').text),
+            description: row.at_css('.description').text.strip,
+            effective_date: Date.parse(row.at_css('.date').text),
+            balance: parse_money(row.at_css('.balance').text)
+          )
+        end
+      end
+
+      def parse_money(text)
+        # Handle formats like "1.234,56 €" or "$1,234.56"
+        text = text.gsub(/[^0-9,.-]/, '')
+        
+        # Determine if comma or period is decimal separator
+        if text.count(',') == 1 && text.index(',') > text.length - 4
+          # European format: 1.234,56
+          amount = text.tr('.', '').tr(',', '.').to_f
+        else
+          # US format: 1,234.56
+          amount = text.tr(',', '').to_f
+        end
+        
+        Money.new(amount * 100, 'EUR')
+      end
+    end
+  end
+end
+```
+
+## Debugging
+
+Enable debug mode to see HTTP traffic:
+
+```ruby
+Bankscrap.debug = true
+bank = Bankscrap::WebBank::Bank.new(user: 'test', password: 'test')
+```
+
+This will log all HTTP requests and responses to STDOUT.
+
+## Common Challenges
+
+### CSRF Tokens
+
+```ruby
+def login
+  page = @http.get(BASE_ENDPOINT + '/login')
+  
+  # Extract CSRF token from hidden field
+  csrf_token = page.at_css('input[name="csrf_token"]')['value']
+  
+  # Include in form submission
+  post(
+    BASE_ENDPOINT + '/auth',
+    fields: {
+      username: @user,
+      password: @password,
+      csrf_token: csrf_token
+    }
+  )
+end
+```
+
+### Captchas
+
+<Warning>
+Captchas are designed to prevent automation. If a bank uses captchas, web scraping may not be feasible. Consider reverse engineering their mobile app API instead.
+</Warning>
+
+### Rate Limiting
+
+```ruby
+def fetch_transactions_for(account, start_date:, end_date:)
+  # Add delay between requests
+  sleep 1
+  
+  # Make request
+  page = @http.get(TRANSACTIONS_ENDPOINT)
+  # ...
+end
+```

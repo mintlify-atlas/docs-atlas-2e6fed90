@@ -1,0 +1,651 @@
+---
+title: Data Models
+description: Complete reference for all BankScrap data models - Account, Transaction, Card, Loan, and Investment
+---
+
+## Overview
+
+BankScrap defines five core data models that represent financial entities. All models use the `Money` gem for currency handling and include the `Utils::Inspectable` module for clean `inspect` output.
+
+<Note>
+  All monetary amounts in BankScrap are `Money` objects, never raw floats or integers. This ensures precision in financial calculations.
+</Note>
+
+## Account
+
+Represents a bank account with balance information and transaction history.
+
+### Class Definition
+
+```ruby lib/bankscrap/account.rb
+module Bankscrap
+  class Account
+    include Utils::Inspectable
+
+    attr_accessor :bank, :id, :name, :balance,
+                  :available_balance, :description,
+                  :transactions, :iban, :bic,
+                  :raw_data
+  end
+end
+```
+
+### Attributes
+
+| Attribute | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `bank` | `Bank` | Yes | Reference to the parent bank instance |
+| `id` | `String` | Yes | Bank's internal account identifier |
+| `name` | `String` | No | Account name (e.g., "Main Checking") |
+| `balance` | `Money` | Yes | Current account balance |
+| `available_balance` | `Money` | Yes | Available balance (excluding holds) |
+| `description` | `String` | No | Account description |
+| `iban` | `String` | No | International Bank Account Number |
+| `bic` | `String` | No | Bank Identifier Code (SWIFT) |
+| `transactions` | `Array<Transaction>` | No | Transaction history (lazy loaded) |
+| `raw_data` | `Hash` | No | Original API response data |
+
+### Constructor
+
+```ruby lib/bankscrap/account.rb
+def initialize(params = {})
+  raise NotMoneyObjectError, :balance unless params[:balance].is_a?(Money)
+  raise NotMoneyObjectError, :available_balance unless params[:available_balance].is_a?(Money)
+
+  params.each { |key, value| send "#{key}=", value }
+end
+```
+
+**Validation**:
+- `balance` must be a `Money` object
+- `available_balance` must be a `Money` object
+- Raises `NotMoneyObjectError` if validation fails
+
+### Methods
+
+#### `transactions`
+
+Lazy loads transactions from the bank.
+
+```ruby lib/bankscrap/account.rb
+def transactions
+  @transactions ||= bank.fetch_transactions_for(self)
+end
+```
+
+**Returns**: `Array<Transaction>`
+
+**Behavior**: Fetches transactions only on first access, then caches them.
+
+#### `fetch_transactions(start_date:, end_date:)`
+
+Fetch transactions for a specific date range.
+
+```ruby lib/bankscrap/account.rb
+def fetch_transactions(start_date: Date.today - 2.years, end_date: Date.today)
+  bank.fetch_transactions_for(self, start_date: start_date, end_date: end_date)
+end
+```
+
+**Parameters**:
+- `start_date` - Beginning of date range (default: 2 years ago)
+- `end_date` - End of date range (default: today)
+
+**Returns**: `Array<Transaction>`
+
+#### `currency`
+
+Get the account's currency.
+
+```ruby lib/bankscrap/account.rb
+def currency
+  balance.try(:currency)
+end
+```
+
+**Returns**: `Money::Currency` object (e.g., `EUR`, `USD`)
+
+#### `to_s`
+
+String representation.
+
+```ruby lib/bankscrap/account.rb
+def to_s
+  description
+end
+```
+
+#### `to_a`
+
+Array representation for export.
+
+```ruby lib/bankscrap/account.rb
+def to_a
+  [id, iban, name, description, balance]
+end
+```
+
+### Usage Example
+
+```ruby
+account = Account.new(
+  bank: bank_instance,
+  id: '1234567890',
+  name: 'Main Checking',
+  balance: Money.new(150000, 'EUR'),  # 1500.00 EUR
+  available_balance: Money.new(145000, 'EUR'),  # 1450.00 EUR
+  iban: 'ES12 3456 7890 1234 5678 9012',
+  bic: 'BANKESMM',
+  description: 'Primary checking account'
+)
+
+puts account.balance.format          # => "€1,500.00"
+puts account.currency.iso_code       # => "EUR"
+puts account.iban                    # => "ES12 3456 7890 1234 5678 9012"
+
+# Fetch all transactions (lazy loaded)
+transactions = account.transactions
+
+# Fetch transactions for specific date range
+last_month = account.fetch_transactions(
+  start_date: Date.today - 1.month,
+  end_date: Date.today
+)
+```
+
+---
+
+## Transaction
+
+Represents a financial transaction on an account.
+
+### Class Definition
+
+```ruby lib/bankscrap/transaction.rb
+module Bankscrap
+  class Transaction
+    include Utils::Inspectable
+
+    attr_accessor :id, :amount, :description, :description_detail,
+                  :effective_date, :operation_date, :balance, :account
+  end
+end
+```
+
+### Attributes
+
+| Attribute | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | `String` | Yes | Unique transaction identifier |
+| `amount` | `Money` | Yes | Transaction amount (negative for debits) |
+| `description` | `String` | Yes | Transaction description |
+| `description_detail` | `String` | No | Additional details about the transaction |
+| `effective_date` | `Date` | Yes | Date when transaction became effective |
+| `operation_date` | `Date` | No | Date when transaction was initiated |
+| `balance` | `Money` | No | Running account balance after this transaction |
+| `account` | `Account` | Yes | Reference to the parent account |
+
+### Constructor
+
+```ruby lib/bankscrap/transaction.rb
+def initialize(params = {})
+  raise NotMoneyObjectError, :amount unless params[:amount].is_a?(Money)
+
+  params.each { |key, value| send "#{key}=", value }
+end
+```
+
+**Validation**:
+- `amount` must be a `Money` object
+- Raises `NotMoneyObjectError` if validation fails
+
+### Methods
+
+#### `currency`
+
+Get the transaction's currency.
+
+```ruby lib/bankscrap/transaction.rb
+def currency
+  amount.currency
+end
+```
+
+#### `to_s`
+
+String representation.
+
+```ruby lib/bankscrap/transaction.rb
+def to_s
+  description
+end
+```
+
+#### `to_a`
+
+Array representation for export.
+
+```ruby lib/bankscrap/transaction.rb
+def to_a
+  [id, effective_date.strftime('%d/%m/%Y'), description, description_detail, amount]
+end
+```
+
+### Usage Example
+
+```ruby
+transaction = Transaction.new(
+  account: account_instance,
+  id: 'TXN-20240115-001',
+  amount: Money.new(-5000, 'EUR'),  # -50.00 EUR (debit)
+  description: 'Grocery Store Purchase',
+  description_detail: 'SuperMarket XYZ - Card ending in 1234',
+  effective_date: Date.parse('2024-01-15'),
+  operation_date: Date.parse('2024-01-14'),
+  balance: Money.new(145000, 'EUR')  # 1450.00 EUR
+)
+
+puts transaction.amount.format       # => "-€50.00"
+puts transaction.effective_date      # => 2024-01-15
+puts transaction.description         # => "Grocery Store Purchase"
+
+# Check if debit or credit
+if transaction.amount.negative?
+  puts "Debit transaction"
+else
+  puts "Credit transaction"
+end
+```
+
+---
+
+## Card
+
+Represents a credit or debit card.
+
+### Class Definition
+
+```ruby lib/bankscrap/card.rb
+module Bankscrap
+  class Card
+    include Utils::Inspectable
+
+    attr_accessor :bank, :id, :name, :pan, :amount,
+                  :avaliable, :is_credit, :description,
+                  :raw_data
+  end
+end
+```
+
+<Warning>
+  Note the typo in the source: `avaliable` instead of `available`. This is maintained for backward compatibility.
+</Warning>
+
+### Attributes
+
+| Attribute | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `bank` | `Bank` | Yes | Reference to the parent bank instance |
+| `id` | `String` | Yes | Card identifier |
+| `name` | `String` | No | Card name (e.g., "Visa Gold") |
+| `pan` | `String` | No | Primary Account Number (card number) |
+| `amount` | `Money` | Yes | Current balance or outstanding amount |
+| `avaliable` | `Money` | Yes | Available credit or funds |
+| `is_credit` | `Boolean` | No | Whether this is a credit card |
+| `description` | `String` | No | Card description |
+| `raw_data` | `Hash` | No | Original API response data |
+
+### Constructor
+
+```ruby lib/bankscrap/card.rb
+def initialize(params = {})
+  raise NotMoneyObjectError, :amount unless params[:amount].is_a?(Money)
+  raise NotMoneyObjectError, :avaliable unless params[:avaliable].is_a?(Money)
+
+  params.each { |key, value| send "#{key}=", value }
+end
+```
+
+**Validation**:
+- `amount` must be a `Money` object
+- `avaliable` must be a `Money` object
+
+### Methods
+
+#### `currency`
+
+```ruby lib/bankscrap/card.rb
+def currency
+  amount.try(:currency)
+end
+```
+
+#### `to_s`
+
+```ruby lib/bankscrap/card.rb
+def to_s
+  description
+end
+```
+
+#### `to_a`
+
+```ruby lib/bankscrap/card.rb
+def to_a
+  [id, name, description, pan, amount, avaliable, is_credit]
+end
+```
+
+### Usage Example
+
+```ruby
+# Credit card
+credit_card = Card.new(
+  bank: bank_instance,
+  id: 'CARD-001',
+  name: 'Visa Gold',
+  pan: '**** **** **** 1234',
+  amount: Money.new(50000, 'EUR'),      # 500.00 EUR outstanding
+  avaliable: Money.new(450000, 'EUR'),  # 4500.00 EUR available credit
+  is_credit: true,
+  description: 'Gold Credit Card'
+)
+
+# Debit card
+debit_card = Card.new(
+  bank: bank_instance,
+  id: 'CARD-002',
+  name: 'Visa Debit',
+  pan: '**** **** **** 5678',
+  amount: Money.new(100000, 'EUR'),     # 1000.00 EUR balance
+  avaliable: Money.new(100000, 'EUR'),  # 1000.00 EUR available
+  is_credit: false,
+  description: 'Standard Debit Card'
+)
+
+puts credit_card.amount.format        # => "€500.00"
+puts credit_card.avaliable.format     # => "€4,500.00"
+puts credit_card.is_credit            # => true
+```
+
+---
+
+## Loan
+
+Represents a loan product.
+
+### Class Definition
+
+```ruby lib/bankscrap/loan.rb
+module Bankscrap
+  class Loan
+    include Utils::Inspectable
+
+    attr_accessor :bank, :id, :name, :amount,
+                  :description,
+                  :raw_data
+  end
+end
+```
+
+### Attributes
+
+| Attribute | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `bank` | `Bank` | Yes | Reference to the parent bank instance |
+| `id` | `String` | Yes | Loan identifier |
+| `name` | `String` | No | Loan name |
+| `amount` | `Money` | Yes | Outstanding loan amount |
+| `description` | `String` | No | Loan description |
+| `raw_data` | `Hash` | No | Original API response data |
+
+### Constructor
+
+```ruby lib/bankscrap/loan.rb
+def initialize(params = {})
+  raise NotMoneyObjectError, :amount unless params[:amount].is_a?(Money)
+
+  params.each { |key, value| send "#{key}=", value }
+end
+```
+
+**Validation**:
+- `amount` must be a `Money` object
+
+### Methods
+
+#### `currency`
+
+```ruby lib/bankscrap/loan.rb
+def currency
+  amount.try(:currency)
+end
+```
+
+#### `to_s`
+
+```ruby lib/bankscrap/loan.rb
+def to_s
+  description
+end
+```
+
+#### `to_a`
+
+```ruby lib/bankscrap/loan.rb
+def to_a
+  [id, name, description, amount]
+end
+```
+
+### Usage Example
+
+```ruby
+loan = Loan.new(
+  bank: bank_instance,
+  id: 'LOAN-001',
+  name: 'Home Mortgage',
+  amount: Money.new(25000000, 'EUR'),  # 250,000.00 EUR outstanding
+  description: '30-year fixed rate mortgage'
+)
+
+puts loan.amount.format               # => "€250,000.00"
+puts loan.name                        # => "Home Mortgage"
+```
+
+---
+
+## Investment
+
+Represents an investment product.
+
+### Class Definition
+
+```ruby lib/bankscrap/investment.rb
+module Bankscrap
+  class Investment
+    include Utils::Inspectable
+
+    attr_accessor :bank, :id, :name, :balance, :currency, :investment
+  end
+end
+```
+
+### Attributes
+
+| Attribute | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `bank` | `Bank` | Yes | Reference to the parent bank instance |
+| `id` | `String` | Yes | Investment identifier |
+| `name` | `String` | No | Investment name |
+| `balance` | Varies | No | Investment balance (not validated as Money) |
+| `currency` | `String` | No | Currency code |
+| `investment` | Varies | No | Investment details |
+
+<Info>
+  Unlike other models, Investment does not enforce `Money` objects for the balance attribute, providing more flexibility for complex investment structures.
+</Info>
+
+### Constructor
+
+```ruby lib/bankscrap/investment.rb
+def initialize(params = {})
+  params.each { |key, value| send "#{key}=", value }
+end
+```
+
+**Validation**: None - most flexible model
+
+### Usage Example
+
+```ruby
+investment = Investment.new(
+  bank: bank_instance,
+  id: 'INV-001',
+  name: 'S&P 500 Index Fund',
+  balance: 50000.75,
+  currency: 'USD',
+  investment: {
+    units: 125.5,
+    price_per_unit: 398.41,
+    total_value: 50000.75
+  }
+)
+
+puts investment.name                  # => "S&P 500 Index Fund"
+puts investment.balance               # => 50000.75
+puts investment.currency              # => "USD"
+```
+
+---
+
+## Common Patterns
+
+### Using Money Objects
+
+All monetary amounts should be created using the `Money` gem:
+
+```ruby
+# Create from cents/minor units
+balance = Money.new(150000, 'EUR')    # 1500.00 EUR
+
+# Create from fractional amount (use with caution)
+balance = Money.from_amount(1500.00, 'EUR')
+
+# Format for display
+balance.format                         # => "€1,500.00"
+balance.format(symbol: false)          # => "1,500.00"
+
+# Arithmetic
+new_balance = balance + Money.new(5000, 'EUR')
+new_balance = balance - Money.new(5000, 'EUR')
+
+# Comparison
+balance > Money.new(100000, 'EUR')    # => true
+```
+
+### Inspectable Module
+
+All models include `Utils::Inspectable` for clean console output:
+
+```ruby
+account = Account.new(
+  id: '123',
+  name: 'Checking',
+  balance: Money.new(100000, 'EUR'),
+  available_balance: Money.new(95000, 'EUR'),
+  iban: 'ES12...'
+)
+
+puts account.inspect
+# => #<Bankscrap::Account:0x00007f... id: "123" name: "Checking" balance: #<Money...> available_balance: #<Money...> iban: "ES12...">
+```
+
+### Export to Array
+
+All models provide `to_a` for easy CSV export:
+
+```ruby
+account_data = account.to_a
+# => ["123", "ES12...", "Checking", "Primary checking account", #<Money...>]
+
+transaction_data = transaction.to_a
+# => ["TXN-001", "15/01/2024", "Purchase", "Details", #<Money...>]
+```
+
+## Error Handling
+
+### NotMoneyObjectError
+
+Raised when a non-Money object is provided for monetary fields:
+
+```ruby
+begin
+  account = Account.new(
+    balance: 1500.00,  # Wrong! Should be Money object
+    available_balance: Money.new(145000, 'EUR')
+  )
+rescue Bankscrap::NotMoneyObjectError => e
+  puts e.message
+  # => "balance should be a Money object"
+end
+```
+
+**Fix**:
+```ruby
+account = Account.new(
+  balance: Money.new(150000, 'EUR'),              # Correct
+  available_balance: Money.new(145000, 'EUR')
+)
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Always Use Money" icon="coins">
+    Create `Money` objects for all amounts. Never use floats or integers directly.
+  </Card>
+  
+  <Card title="Store Raw Data" icon="database">
+    Keep the original API response in `raw_data` for debugging and future reference.
+  </Card>
+  
+  <Card title="Use Lazy Loading" icon="clock">
+    Access `account.transactions` to lazy load. Use `fetch_transactions` for custom date ranges.
+  </Card>
+  
+  <Card title="Handle Nil Values" icon="shield-check">
+    Use `try` when accessing potentially nil attributes like `balance.try(:currency)`.
+  </Card>
+</CardGroup>
+
+## Model Comparison
+
+| Feature | Account | Transaction | Card | Loan | Investment |
+|---------|---------|-------------|------|------|------------|
+| Money validation | Yes (2 fields) | Yes (1 field) | Yes (2 fields) | Yes (1 field) | No |
+| Bank reference | Yes | Via account | Yes | Yes | Yes |
+| Inspectable | Yes | Yes | Yes | Yes | Yes |
+| `to_a` export | Yes | Yes | Yes | Yes | No |
+| Currency method | Yes | Yes | Yes | Yes | No |
+| Complex data | Transactions | None | None | None | Flexible |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Bank Class" icon="building-columns" href="/concepts/bank-class">
+    Learn how to fetch and manage these models
+  </Card>
+  
+  <Card title="Exporters" icon="file-export" href="/cli/export">
+    Export account and transaction data to CSV/JSON
+  </Card>
+  
+  <Card title="Creating Adapters" icon="code" href="/adapters/generator">
+    Build adapters that create these models
+  </Card>
+  
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Understand how models fit into the system
+  </Card>
+</CardGroup>

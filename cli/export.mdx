@@ -1,0 +1,431 @@
+---
+title: Export Functionality
+description: Export your banking data to CSV and JSON formats
+---
+
+BankScrap can export all types of banking data (transactions, accounts, cards, loans) to structured file formats for analysis, record-keeping, or integration with other tools.
+
+## Supported Formats
+
+### CSV Export
+
+Comma-separated values format, ideal for spreadsheet applications like Excel, Google Sheets, or LibreOffice Calc.
+
+### JSON Export
+
+Structured JSON format, perfect for programmatic access, data analysis, or integration with web applications.
+
+## Exporting Data
+
+### Basic Export
+
+Add `--format` and optionally `--output` to any command:
+
+```bash
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --format json
+```
+
+This creates a file named `transactions.json` in the current directory.
+
+### Custom Output Path
+
+Specify where to save the file:
+
+```bash
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --format csv \
+  --output ~/Documents/Banking/transactions-2024-01.csv
+```
+
+### Output to Stdout
+
+Use `-` as the output path to write to standard output:
+
+```bash
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --format json \
+  --output - | jq '.transactions'
+```
+
+## Export Formats by Data Type
+
+### Transactions
+
+<CodeGroup>
+```csv CSV Format
+Date,Description,Amount
+15/01/2024,Salary Deposit - Company ABC,2500.00
+14/01/2024,Grocery Store - Downtown,-85.50
+13/01/2024,ATM Withdrawal,-100.00
+12/01/2024,Electric Company - Monthly Bill,-65.30
+```
+
+```json JSON Format
+{
+  "account": {
+    "description": "Main Account",
+    "iban": "ES7921000813610123456789"
+  },
+  "transactions": [
+    {
+      "date": "15/01/2024",
+      "description": "Salary Deposit - Company ABC",
+      "amount": "2500.00"
+    },
+    {
+      "date": "14/01/2024",
+      "description": "Grocery Store - Downtown",
+      "amount": "-85.50"
+    },
+    {
+      "date": "13/01/2024",
+      "description": "ATM Withdrawal",
+      "amount": "-100.00"
+    }
+  ]
+}
+```
+</CodeGroup>
+
+<Note>
+JSON transaction exports include account metadata (description and IBAN) along with the transactions.
+</Note>
+
+### Accounts (Balance)
+
+<CodeGroup>
+```csv CSV Format
+Id,Iban,Name,Description,Bank,Balance
+1,ES7921000813610123456789,Main,Main Account,BBVA,2450.00
+2,ES1234567890123456789012,Savings,Savings Account,BBVA,10523.45
+```
+
+```json JSON Format
+{
+  "accounts": [
+    {
+      "iban": "ES7921000813610123456789",
+      "name": "Main",
+      "description": "Main Account",
+      "amount": "2450.00"
+    },
+    {
+      "iban": "ES1234567890123456789012",
+      "name": "Savings",
+      "description": "Savings Account",
+      "amount": "10523.45"
+    }
+  ]
+}
+```
+</CodeGroup>
+
+### Cards
+
+<CodeGroup>
+```csv CSV Format
+Id,Name,Description,Pan,Amount,Avaliable,Is_credit
+1,VISA,Gold Premium Card,****1234,-245.50,-245.50,true
+2,Mastercard,Debit Personal Account,****5678,0.00,0.00,false
+```
+
+```json JSON Format
+{
+  "cards": [
+    {
+      "id": "1",
+      "name": "VISA",
+      "description": "Gold Premium Card",
+      "pan": "****1234",
+      "amount": "-245.50",
+      "avaliable": "-245.50",
+      "isCredit": true
+    },
+    {
+      "id": "2",
+      "name": "Mastercard",
+      "description": "Debit Personal Account",
+      "pan": "****5678",
+      "amount": "0.00",
+      "avaliable": "0.00",
+      "isCredit": false
+    }
+  ]
+}
+```
+</CodeGroup>
+
+### Loans
+
+<CodeGroup>
+```csv CSV Format
+Id,Name,Description,Amount
+1,Home,Mortgage Loan #123456,-150000.00
+2,Car,Loan Personal Vehicle,-12500.00
+```
+
+```json JSON Format
+{
+  "loans": [
+    {
+      "id": "1",
+      "name": "Home",
+      "description": "Mortgage Loan #123456",
+      "amount": "-150000.00"
+    },
+    {
+      "id": "2",
+      "name": "Car",
+      "description": "Loan Personal Vehicle",
+      "amount": "-12500.00"
+    }
+  ]
+}
+```
+</CodeGroup>
+
+## Export Workflows
+
+### Monthly Transaction Export
+
+<Steps>
+  <Step title="Set date range">
+    Define the start and end dates for the month:
+    
+    ```bash
+    FROM_DATE="01-01-2024"
+    TO_DATE="31-01-2024"
+    ```
+  </Step>
+  
+  <Step title="Export to CSV">
+    Run the export command:
+    
+    ```bash
+    bankscrap transactions BBVA \
+      --credentials user:12345678 password:my_password \
+      --from $FROM_DATE \
+      --to $TO_DATE \
+      --format csv \
+      --output transactions-january-2024.csv
+    ```
+  </Step>
+  
+  <Step title="Import to spreadsheet">
+    Open the CSV file in Excel, Google Sheets, or your preferred tool for analysis.
+  </Step>
+</Steps>
+
+### Complete Account Snapshot
+
+Export all account data for record-keeping:
+
+```bash
+#!/bin/bash
+DATE=$(date +%Y-%m-%d)
+OUTPUT_DIR="./banking-snapshot-$DATE"
+
+mkdir -p "$OUTPUT_DIR"
+
+# Export accounts
+bankscrap balance BBVA \
+  --credentials user:$USER password:$PASS \
+  --format json \
+  --output "$OUTPUT_DIR/accounts.json"
+
+# Export cards
+bankscrap cards BBVA \
+  --credentials user:$USER password:$PASS \
+  --format json \
+  --output "$OUTPUT_DIR/cards.json"
+
+# Export loans
+bankscrap loans BBVA \
+  --credentials user:$USER password:$PASS \
+  --format json \
+  --output "$OUTPUT_DIR/loans.json"
+
+# Export transactions (last 90 days)
+bankscrap transactions BBVA \
+  --credentials user:$USER password:$PASS \
+  --from $(date -d '90 days ago' +%d-%m-%Y) \
+  --to $(date +%d-%m-%Y) \
+  --format json \
+  --output "$OUTPUT_DIR/transactions.json"
+
+echo "Complete snapshot saved to $OUTPUT_DIR"
+```
+
+### Data Pipeline Integration
+
+Use stdout to pipe data to other tools:
+
+<CodeGroup>
+```bash Filter with jq
+# Extract only positive transactions (income)
+bankscrap transactions BBVA \
+  --credentials user:$USER password:$PASS \
+  --format json \
+  --output - | \
+  jq '.transactions[] | select(.amount | tonumber > 0)'
+```
+
+```bash Process with Python
+# Pipe to Python for custom analysis
+bankscrap transactions BBVA \
+  --credentials user:$USER password:$PASS \
+  --format json \
+  --output - | \
+  python analyze_transactions.py
+```
+
+```bash Upload to cloud
+# Export and upload to S3
+bankscrap transactions BBVA \
+  --credentials user:$USER password:$PASS \
+  --format json \
+  --output - | \
+  aws s3 cp - s3://my-bucket/transactions-$(date +%Y-%m-%d).json
+```
+</CodeGroup>
+
+## Default Filenames
+
+When `--output` is not specified, BankScrap uses default filenames based on the data type:
+
+| Data Type | CSV Default | JSON Default |
+|-----------|-------------|-------------|
+| Transactions | `transactions.csv` | `transactions.json` |
+| Accounts | `accounts.csv` | `accounts.json` |
+| Cards | `cards.csv` | `cards.json` |
+| Loans | `loans.csv` | `loans.json` |
+
+<Note>
+Default filenames are created in the current working directory from where you run the command.
+</Note>
+
+## Export Success Messages
+
+After a successful export, BankScrap displays a confirmation message:
+
+```bash
+Transactions for: Main Account (ES7921000813610123456789) exported to transactions.json
+```
+
+```bash
+Accounts exported to accounts.csv
+```
+
+```bash
+Cards exported to cards.json
+```
+
+```bash
+Loans exported to loans.csv
+```
+
+## Programmatic Access
+
+The export functionality is implemented in Ruby classes that you can also use programmatically:
+
+### CSV Exporter
+
+Location: `lib/bankscrap/exporters/csv.rb:1`
+
+```ruby
+require 'bankscrap/exporters/csv'
+
+account = client.accounts.first
+transactions = account.transactions
+
+exporter = BankScrap::Exporter::Csv.new(account)
+exporter.write_to_file(transactions, 'output.csv')
+```
+
+### JSON Exporter
+
+Location: `lib/bankscrap/exporters/json.rb:1`
+
+```ruby
+require 'bankscrap/exporters/json'
+
+account = client.accounts.first
+transactions = account.transactions
+
+exporter = BankScrap::Exporter::Json.new(account)
+exporter.write_to_file(transactions, 'output.json')
+```
+
+## Best Practices
+
+### Data Security
+
+<Warning>
+Exported files contain sensitive financial information. Follow these security practices:
+
+- Store exports in encrypted folders
+- Never commit exports to version control
+- Add `*.csv` and `*.json` to `.gitignore`
+- Set appropriate file permissions: `chmod 600 filename.csv`
+- Delete old exports when no longer needed
+</Warning>
+
+### Backup Strategy
+
+```bash
+#!/bin/bash
+# Weekly backup script
+BACKUP_DIR="$HOME/Banking/Backups/$(date +%Y-%m-%d)"
+mkdir -p "$BACKUP_DIR"
+
+# Export all data
+bankscrap balance BBVA --credentials user:$U password:$P --format json --output "$BACKUP_DIR/balance.json"
+bankscrap transactions BBVA --credentials user:$U password:$P --format json --output "$BACKUP_DIR/transactions.json"
+
+# Encrypt the backup
+tar czf - "$BACKUP_DIR" | gpg -c > "$BACKUP_DIR.tar.gz.gpg"
+rm -rf "$BACKUP_DIR"
+
+echo "Encrypted backup created: $BACKUP_DIR.tar.gz.gpg"
+```
+
+### Automation Tips
+
+- Use cron jobs for scheduled exports
+- Implement error handling in scripts
+- Log export operations for audit trails
+- Validate exported data before deleting sources
+- Use version control for export scripts (not the data)
+
+## Troubleshooting
+
+### Unsupported Format Error
+
+```bash
+$ bankscrap balance BBVA --credentials user:123 password:pass --format xml
+Sorry, file format not supported.
+```
+
+**Solution:** Only `csv` and `json` formats are supported.
+
+### Permission Denied
+
+```bash
+$ bankscrap transactions BBVA --credentials user:123 password:pass --format json --output /protected/file.json
+Permission denied @ rb_sysopen - /protected/file.json
+```
+
+**Solution:** Ensure you have write permissions to the output directory.
+
+### Empty Export
+
+If your export file is empty or missing expected data:
+
+1. Run the command without `--format` to see terminal output
+2. Check if data is being fetched correctly
+3. Verify your credentials and IBAN if specified
+4. Use `--log` or `--debug` to troubleshoot

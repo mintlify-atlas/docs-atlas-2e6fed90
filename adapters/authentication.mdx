@@ -1,0 +1,377 @@
+---
+title: 'Authentication Patterns'
+description: 'Handling credentials and implementing authentication flows'
+---
+
+BankScrap provides a flexible credential system that supports various authentication patterns used by different banks.
+
+## Defining Required Credentials
+
+Every adapter must specify what credentials it needs:
+
+```ruby
+module Bankscrap
+  module MyBank
+    class Bank < ::Bankscrap::Bank
+      REQUIRED_CREDENTIALS = %i[user password].freeze
+    end
+  end
+end
+```
+
+### Common Credential Types
+
+<CodeGroup>
+```ruby Username and password
+REQUIRED_CREDENTIALS = %i[user password].freeze
+```
+
+```ruby DNI and password
+REQUIRED_CREDENTIALS = %i[dni password].freeze
+```
+
+```ruby Multiple factors
+REQUIRED_CREDENTIALS = %i[user password birthday].freeze
+```
+
+```ruby Account number based
+REQUIRED_CREDENTIALS = %i[account_number pin].freeze
+```
+</CodeGroup>
+
+## Credential Initialization
+
+The base `Bankscrap::Bank` class automatically handles credential initialization:
+
+<Steps>
+  <Step title="Validates required credentials">
+    The base class checks that all credentials in `REQUIRED_CREDENTIALS` are provided.
+
+    ```ruby
+    # This will raise Bankscrap::Bank::MissingCredential
+    bank = Bankscrap::MyBank::Bank.new(user: 'john')
+    # Missing: password
+    ```
+  </Step>
+
+  <Step title="Creates instance variables">
+    Each credential is set as an instance variable:
+
+    ```ruby
+    REQUIRED_CREDENTIALS = %i[user password birthday].freeze
+
+    # After initialization:
+    # @user = 'john'
+    # @password = 'secret123'
+    # @birthday = '01/01/1980'
+    ```
+  </Step>
+
+  <Step title="Falls back to environment variables">
+    If a credential isn't provided, it checks environment variables:
+
+    ```bash
+    export BANKSCRAP_MY_BANK_USER=john
+    export BANKSCRAP_MY_BANK_PASSWORD=secret123
+    ```
+
+    ```ruby
+    # This works even without passing credentials
+    bank = Bankscrap::MyBank::Bank.new
+    ```
+  </Step>
+</Steps>
+
+## Environment Variable Naming
+
+Environment variables follow this pattern:
+
+```
+BANKSCRAP_[MODULE_NAME]_[CREDENTIAL]
+```
+
+Examples:
+
+| Module | Credential | Environment Variable |
+|--------|-----------|---------------------|
+| `Bankscrap::BBVA` | `user` | `BANKSCRAP_BBVA_USER` |
+| `Bankscrap::BBVA` | `password` | `BANKSCRAP_BBVA_PASSWORD` |
+| `Bankscrap::BBVANetCash` | `user` | `BANKSCRAP_BBVA_NET_CASH_USER` |
+| `Bankscrap::ING` | `dni` | `BANKSCRAP_ING_DNI` |
+
+<Note>
+The module name is automatically converted to uppercase with underscores between words.
+</Note>
+
+## Custom Credential Processing
+
+Use the `initialize` block to process credentials:
+
+```ruby
+def initialize(credentials = {})
+  super do
+    # Custom processing after credentials are set
+    # but before login is called
+    
+    # Format birthday
+    @birthday = Date.parse(@birthday) if @birthday.is_a?(String)
+    
+    # Convert DNI to uppercase
+    @dni = @dni.upcase
+    
+    # Generate device ID
+    @device_id = SecureRandom.hex(16)
+  end
+end
+```
+
+## Authentication Patterns
+
+### Token-Based Authentication
+
+Common for REST APIs:
+
+```ruby
+def login
+  params = {
+    username: @user,
+    password: @password
+  }
+  
+  response = post(
+    BASE_ENDPOINT + LOGIN_ENDPOINT,
+    fields: params.to_json
+  )
+  
+  json = JSON.parse(response)
+  @auth_token = json['access_token']
+  @refresh_token = json['refresh_token']
+  
+  # Add token to all subsequent requests
+  add_headers('Authorization' => "Bearer #{@auth_token}")
+end
+```
+
+### Session-Based Authentication
+
+Common for web scraping:
+
+```ruby
+def login
+  # Initialize cookies
+  initialize_cookie(BASE_ENDPOINT)
+  
+  # Submit login form
+  response = post(
+    BASE_ENDPOINT + '/login',
+    fields: {
+      'username' => @user,
+      'password' => @password,
+      'submit' => 'Login'
+    }
+  )
+  
+  # Session is maintained via cookies automatically
+end
+```
+
+### OAuth 2.0 Authentication
+
+```ruby
+def login
+  # Step 1: Get authorization code
+  auth_params = {
+    client_id: CLIENT_ID,
+    response_type: 'code',
+    redirect_uri: REDIRECT_URI,
+    scope: 'accounts transactions'
+  }
+  
+  # Step 2: Exchange code for token
+  token_params = {
+    grant_type: 'password',
+    username: @user,
+    password: @password,
+    client_id: CLIENT_ID,
+    client_secret: CLIENT_SECRET
+  }
+  
+  response = post(TOKEN_ENDPOINT, fields: token_params.to_json)
+  json = JSON.parse(response)
+  
+  @access_token = json['access_token']
+  add_headers('Authorization' => "Bearer #{@access_token}")
+end
+```
+
+### Multi-Factor Authentication
+
+For banks requiring additional verification:
+
+```ruby
+REQUIRED_CREDENTIALS = %i[user password otp].freeze
+
+def login
+  # First authentication step
+  params = {
+    username: @user,
+    password: @password
+  }
+  response = post(LOGIN_ENDPOINT, fields: params.to_json)
+  json = JSON.parse(response)
+  
+  @session_id = json['session_id']
+  
+  # Second authentication step with OTP
+  otp_params = {
+    session_id: @session_id,
+    otp: @otp
+  }
+  response = post(VERIFY_ENDPOINT, fields: otp_params.to_json)
+  json = JSON.parse(response)
+  
+  @auth_token = json['token']
+  add_headers('Authorization' => "Bearer #{@auth_token}")
+end
+```
+
+### API Key Authentication
+
+```ruby
+REQUIRED_CREDENTIALS = %i[api_key api_secret].freeze
+
+def initialize(credentials = {})
+  super do
+    # Set API key in headers
+    add_headers(
+      'X-API-Key' => @api_key,
+      'X-API-Secret' => @api_secret
+    )
+  end
+end
+
+def login
+  # No login needed, authentication is via headers
+end
+```
+
+## Handling Authentication Errors
+
+```ruby
+def login
+  params = { user: @user, password: @password }
+  response = post(LOGIN_ENDPOINT, fields: params.to_json)
+  json = JSON.parse(response)
+  
+  case json['error_code']
+  when 'INVALID_CREDENTIALS'
+    raise 'Invalid username or password'
+  when 'ACCOUNT_LOCKED'
+    raise 'Account is locked. Please contact the bank.'
+  when 'OTP_REQUIRED'
+    raise 'OTP is required but not provided'
+  end
+  
+  raise 'Login failed' unless json['success']
+  
+  @auth_token = json['token']
+  add_headers('Authorization' => "Bearer #{@auth_token}")
+end
+```
+
+## Refreshing Tokens
+
+For APIs with expiring tokens:
+
+```ruby
+def login
+  authenticate
+end
+
+def fetch_accounts
+  response = get(ACCOUNTS_ENDPOINT)
+  
+  # Check if token expired
+  if response.include?('token_expired')
+    refresh_token
+    response = get(ACCOUNTS_ENDPOINT)
+  end
+  
+  json = JSON.parse(response)
+  json['accounts'].map { |data| build_account(data) }
+end
+
+private
+
+def authenticate
+  params = { user: @user, password: @password }
+  response = post(LOGIN_ENDPOINT, fields: params.to_json)
+  json = JSON.parse(response)
+  
+  @access_token = json['access_token']
+  @refresh_token = json['refresh_token']
+  @token_expires_at = Time.now + json['expires_in']
+  
+  add_headers('Authorization' => "Bearer #{@access_token}")
+end
+
+def refresh_token
+  params = {
+    grant_type: 'refresh_token',
+    refresh_token: @refresh_token
+  }
+  
+  response = post(TOKEN_ENDPOINT, fields: params.to_json)
+  json = JSON.parse(response)
+  
+  @access_token = json['access_token']
+  @token_expires_at = Time.now + json['expires_in']
+  
+  add_headers('Authorization' => "Bearer #{@access_token}")
+end
+```
+
+## Security Best Practices
+
+<Warning>
+Never hardcode credentials in your adapter code. Always use the credential system or environment variables.
+</Warning>
+
+### Do's
+
+- Use HTTPS endpoints only
+- Store tokens in instance variables, not constants
+- Validate credential format before sending to API
+- Handle authentication errors gracefully
+- Support environment variables for credentials
+
+### Don'ts
+
+- Don't log credentials or tokens
+- Don't store credentials in files
+- Don't expose credentials in error messages
+- Don't commit test credentials to version control
+
+## Testing Authentication
+
+Test your authentication implementation:
+
+```ruby
+# Test with valid credentials
+bank = Bankscrap::MyBank::Bank.new(
+  user: 'test_user',
+  password: 'test_password'
+)
+
+# Test with missing credentials
+begin
+  bank = Bankscrap::MyBank::Bank.new(user: 'test_user')
+rescue Bankscrap::Bank::MissingCredential => e
+  puts "Expected error: #{e.message}"
+end
+
+# Test with environment variables
+ENV['BANKSCRAP_MY_BANK_USER'] = 'test_user'
+ENV['BANKSCRAP_MY_BANK_PASSWORD'] = 'test_password'
+bank = Bankscrap::MyBank::Bank.new
+```

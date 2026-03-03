@@ -1,0 +1,380 @@
+---
+title: 'Error Handling'
+description: 'Handling exceptions and errors in BankScrap'
+---
+
+## Overview
+
+BankScrap raises specific exceptions for different error conditions. Proper error handling ensures your application can gracefully handle authentication failures, data validation errors, and network issues.
+
+## Exception Types
+
+### MissingCredential
+
+Raised when required credentials are not provided during initialization.
+
+**Location**: `lib/bankscrap/bank.rb:12`
+
+```ruby
+begin
+  bank = Bankscrap::BBVA::Bank.new(user: 'myuser')
+  # Missing password
+rescue Bankscrap::Bank::MissingCredential => e
+  puts "Error: #{e.message}"
+  # => "Missing credential: 'password'"
+end
+```
+
+**Prevention**: Always provide all required credentials or set environment variables:
+
+```ruby
+# Option 1: Provide all credentials
+bank = Bankscrap::BBVA::Bank.new(
+  user: 'myuser',
+  password: 'mypassword'
+)
+
+# Option 2: Use environment variables
+export BANKSCRAP_BBVA_USER=myuser
+export BANKSCRAP_BBVA_PASSWORD=mypassword
+bank = Bankscrap::BBVA::Bank.new
+```
+
+### NotMoneyObjectError
+
+Raised when a monetary value is not a Money object.
+
+**Location**: `lib/bankscrap.rb:25-29`
+
+```ruby
+begin
+  account = Bankscrap::Account.new(
+    balance: 100.50,  # Should be Money object
+    available_balance: Money.new(10000, 'EUR')
+  )
+rescue Bankscrap::NotMoneyObjectError => e
+  puts e.message
+  # => "balance should be a Money object"
+end
+```
+
+**This error occurs in**:
+- `Account` initialization (balance, available_balance)
+- `Transaction` initialization (amount)
+- `Card` initialization (amount, avaliable)
+- `Loan` initialization (amount)
+
+**Solution**: Always use Money objects:
+
+```ruby
+require 'money'
+
+account = Bankscrap::Account.new(
+  balance: Money.new(10050, 'EUR'),
+  available_balance: Money.new(10000, 'EUR')
+)
+```
+
+## Common Error Scenarios
+
+### Authentication Failures
+
+When login credentials are incorrect:
+
+```ruby
+begin
+  bank = Bankscrap::BBVA::Bank.new(
+    user: 'wrong_user',
+    password: 'wrong_password'
+  )
+rescue => e
+  puts "Authentication failed: #{e.message}"
+  # Log the error
+  # Notify user
+  # Don't retry immediately (to avoid account lockout)
+end
+```
+
+<Warning>
+**Account Lockout Risk**: Multiple failed login attempts may lock your bank account. Implement retry limits and delays.
+</Warning>
+
+### Network Errors
+
+Handle network timeouts and connection issues:
+
+```ruby
+require 'timeout'
+
+begin
+  bank = Bankscrap::ING::Bank.new(
+    dni: YOUR_DNI,
+    password: YOUR_PASSWORD,
+    birthday: "01/01/1980"
+  )
+rescue Timeout::Error
+  puts "Connection timeout. Please check your network."
+rescue SocketError
+  puts "Network error. Please check your internet connection."
+rescue => e
+  puts "Unexpected error: #{e.class} - #{e.message}"
+end
+```
+
+### Missing Data
+
+Not all banks support all features:
+
+```ruby
+bank = Bankscrap::BBVA::Bank.new(
+  user: YOUR_USER,
+  password: YOUR_PASSWORD
+)
+
+# Check if cards are supported
+if bank.cards.nil?
+  puts "This bank adapter doesn't support cards"
+elsif bank.cards.empty?
+  puts "No cards found"
+else
+  bank.cards.each { |card| puts card.name }
+end
+```
+
+### Transaction Fetching Errors
+
+Handle errors when fetching transactions:
+
+```ruby
+account = bank.accounts.first
+
+begin
+  transactions = account.fetch_transactions(
+    start_date: Date.today - 1.year,
+    end_date: Date.today
+  )
+rescue => e
+  puts "Failed to fetch transactions: #{e.message}"
+  # Fall back to cached transactions if available
+  transactions = account.transactions || []
+end
+```
+
+## Best Practices
+
+### 1. Validate Credentials Before Initialization
+
+```ruby
+def connect_to_bank(user, password)
+  raise ArgumentError, "User cannot be blank" if user.blank?
+  raise ArgumentError, "Password cannot be blank" if password.blank?
+  
+  begin
+    Bankscrap::BBVA::Bank.new(user: user, password: password)
+  rescue Bankscrap::Bank::MissingCredential => e
+    Rails.logger.error "Missing credential: #{e.message}"
+    raise
+  rescue => e
+    Rails.logger.error "Bank connection failed: #{e.class} - #{e.message}"
+    raise
+  end
+end
+```
+
+### 2. Use Rescue Blocks for Specific Exceptions
+
+```ruby
+begin
+  bank = Bankscrap::BBVA::Bank.new(
+    user: params[:user],
+    password: params[:password]
+  )
+  
+  account = bank.accounts.first
+  transactions = account.fetch_transactions(
+    start_date: 30.days.ago,
+    end_date: Date.today
+  )
+  
+rescue Bankscrap::Bank::MissingCredential => e
+  # Handle missing credentials
+  flash[:error] = "Please provide all required credentials"
+  
+rescue Bankscrap::NotMoneyObjectError => e
+  # Handle data validation errors
+  Rails.logger.error "Data validation error: #{e.message}"
+  
+rescue Timeout::Error
+  # Handle timeouts
+  flash[:error] = "Connection timeout. Please try again."
+  
+rescue => e
+  # Handle all other errors
+  Rails.logger.error "Unexpected error: #{e.class} - #{e.message}"
+  Rails.logger.error e.backtrace.join("\n")
+  flash[:error] = "An error occurred. Please try again later."
+end
+```
+
+### 3. Implement Retry Logic
+
+```ruby
+def fetch_with_retry(account, max_retries: 3)
+  retries = 0
+  
+  begin
+    account.fetch_transactions(
+      start_date: Date.today - 30.days,
+      end_date: Date.today
+    )
+  rescue Timeout::Error, SocketError => e
+    retries += 1
+    if retries <= max_retries
+      sleep(2 ** retries)  # Exponential backoff
+      retry
+    else
+      Rails.logger.error "Failed after #{max_retries} retries: #{e.message}"
+      raise
+    end
+  end
+end
+```
+
+### 4. Graceful Degradation
+
+```ruby
+class BankService
+  def initialize(user, password)
+    @bank = Bankscrap::BBVA::Bank.new(
+      user: user,
+      password: password
+    )
+  rescue => e
+    Rails.logger.error "Bank initialization failed: #{e.message}"
+    @bank = nil
+  end
+  
+  def accounts
+    return [] unless @bank
+    @bank.accounts
+  rescue => e
+    Rails.logger.error "Failed to fetch accounts: #{e.message}"
+    []
+  end
+  
+  def transactions(account_id, start_date: 30.days.ago, end_date: Date.today)
+    return [] unless @bank
+    
+    account = @bank.accounts.find { |a| a.id == account_id }
+    return [] unless account
+    
+    account.fetch_transactions(start_date: start_date, end_date: end_date)
+  rescue => e
+    Rails.logger.error "Failed to fetch transactions: #{e.message}"
+    # Return cached transactions if available
+    account.transactions || []
+  end
+end
+```
+
+### 5. Logging and Monitoring
+
+```ruby
+require 'logger'
+
+# Enable BankScrap logging
+Bankscrap.log = true
+
+# Or use custom logging
+logger = Logger.new('log/bankscrap.log')
+
+begin
+  logger.info "Connecting to bank..."
+  bank = Bankscrap::BBVA::Bank.new(
+    user: YOUR_USER,
+    password: YOUR_PASSWORD
+  )
+  logger.info "Connected successfully"
+  
+  logger.info "Fetching accounts..."
+  accounts = bank.accounts
+  logger.info "Found #{accounts.count} accounts"
+  
+rescue => e
+  logger.error "Error: #{e.class} - #{e.message}"
+  logger.error e.backtrace.join("\n")
+  raise
+end
+```
+
+## Debugging
+
+### Enable Debug Mode
+
+See detailed HTTP requests and responses:
+
+```ruby
+Bankscrap.debug = true
+Bankscrap.log = true
+
+bank = Bankscrap::BBVA::Bank.new(
+  user: YOUR_USER,
+  password: YOUR_PASSWORD
+)
+# Outputs detailed logs to STDOUT
+```
+
+### Inspect Raw Data
+
+Access raw API responses for debugging:
+
+```ruby
+account = bank.accounts.first
+puts account.raw_data.inspect
+
+transaction = account.transactions.first
+puts transaction.inspect
+```
+
+## Testing Error Handling
+
+```ruby
+require 'rspec'
+
+RSpec.describe 'Bank Connection' do
+  it 'raises MissingCredential when password is missing' do
+    expect {
+      Bankscrap::BBVA::Bank.new(user: 'test')
+    }.to raise_error(Bankscrap::Bank::MissingCredential, /password/)
+  end
+  
+  it 'raises NotMoneyObjectError for invalid balance' do
+    expect {
+      Bankscrap::Account.new(
+        balance: 100,
+        available_balance: Money.new(10000, 'EUR')
+      )
+    }.to raise_error(Bankscrap::NotMoneyObjectError, /balance/)
+  end
+end
+```
+
+## Summary
+
+<CardGroup cols={2}>
+  <Card title="Ruby API" icon="code" href="/library/ruby-api">
+    Learn about initialization and configuration
+  </Card>
+  <Card title="Fetching Data" icon="download" href="/library/fetching-data">
+    Fetch accounts, transactions, and more
+  </Card>
+</CardGroup>
+
+<Tip>
+**Quick Reference**:
+- Use `Bankscrap::Bank::MissingCredential` for missing credentials
+- Use `Bankscrap::NotMoneyObjectError` for invalid Money objects
+- Always validate credentials before initialization
+- Implement retry logic for network errors
+- Enable logging for debugging: `Bankscrap.log = true`
+</Tip>

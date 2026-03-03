@@ -1,0 +1,204 @@
+---
+title: 'Bankscrap::Loan'
+description: 'Represents a bank loan'
+---
+
+## Overview
+
+The `Bankscrap::Loan` class represents a loan product from a bank.
+
+## Attributes
+
+<ResponseField name="bank" type="Bankscrap::Bank">
+  Reference to the bank instance that owns this loan
+</ResponseField>
+
+<ResponseField name="id" type="String">
+  Loan identifier
+</ResponseField>
+
+<ResponseField name="name" type="String">
+  Loan name or label
+</ResponseField>
+
+<ResponseField name="amount" type="Money" required>
+  Loan amount or outstanding balance (must be a Money object)
+</ResponseField>
+
+<ResponseField name="description" type="String">
+  Human-readable loan description
+</ResponseField>
+
+<ResponseField name="raw_data" type="Hash">
+  Raw data from the bank's API response
+</ResponseField>
+
+## Methods
+
+### initialize(params = {})
+
+Creates a new loan instance.
+
+<ParamField path="params" type="Hash" default="{}">
+  Loan attributes
+  
+  <Expandable title="properties">
+    <ParamField path="bank" type="Bankscrap::Bank">
+      Bank instance reference
+    </ParamField>
+    
+    <ParamField path="id" type="String">
+      Loan identifier
+    </ParamField>
+    
+    <ParamField path="name" type="String">
+      Loan name
+    </ParamField>
+    
+    <ParamField path="amount" type="Money" required>
+      Loan amount (must be Money object)
+    </ParamField>
+    
+    <ParamField path="description" type="String">
+      Loan description
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Raises:**
+- `NotMoneyObjectError` - If amount is not a Money object
+
+**Example:**
+
+```ruby
+loan = Bankscrap::Loan.new(
+  bank: bank,
+  id: 'LOAN123',
+  name: 'Mortgage',
+  amount: Money.new(25000000, 'EUR'),  # 250,000.00 EUR
+  description: 'Home Mortgage Loan'
+)
+```
+
+### currency
+
+Returns the currency of the loan amount.
+
+**Returns:** `Money::Currency`
+
+**Example:**
+
+```ruby
+puts loan.currency.iso_code # => "EUR"
+```
+
+### to_s
+
+Returns the string representation of the loan (description).
+
+**Returns:** `String`
+
+### to_a
+
+Converts loan to array format for CSV export.
+
+**Returns:** `Array` - `[id, name, description, amount]`
+
+**Example:**
+
+```ruby
+loan.to_a
+# => ["LOAN123", "Mortgage", "Home Mortgage Loan", #<Money ...>]
+```
+
+## Usage Examples
+
+### Accessing Loans
+
+```ruby
+# Initialize bank and get loans
+bank = Bankscrap::MyBank.new(user: 'username', password: 'password')
+
+# Check if bank supports loans
+if bank.loans
+  bank.loans.each do |loan|
+    puts "Loan: #{loan.name}"
+    puts "Description: #{loan.description}"
+    puts "Outstanding: #{loan.amount.format}"
+    puts ""
+  end
+else
+  puts "This bank adapter does not support loans"
+end
+```
+
+### Calculating Total Debt
+
+```ruby
+# Calculate total outstanding loan amount
+total_debt = bank.loans.sum { |loan| loan.amount.cents }
+
+puts "Total debt: #{Money.new(total_debt, 'EUR').format}"
+```
+
+### Finding Specific Loans
+
+```ruby
+# Find mortgage loans
+mortgages = bank.loans.select { |loan| loan.name.downcase.include?('mortgage') }
+
+# Find loans by ID
+loan = bank.loans.find { |l| l.id == 'LOAN123' }
+```
+
+### Exporting Loans
+
+```ruby
+# Export loans to CSV
+exporter = BankScrap::Exporter::Csv.new(nil)
+exporter.write_to_file(bank.loans, 'loans.csv')
+
+# Export loans to JSON
+exporter = BankScrap::Exporter::Json.new(nil)
+exporter.write_to_file(bank.loans, 'loans.json')
+```
+
+## CSV Export Format
+
+When exporting loans to CSV, the following columns are included:
+
+- **Id**: Loan identifier
+- **Name**: Loan name
+- **Description**: Loan description
+- **Amount**: Outstanding loan amount
+
+## JSON Export Format
+
+When exporting loans to JSON, the structure is:
+
+```json
+{
+  "loans": [
+    {
+      "id": "LOAN123",
+      "name": "Mortgage",
+      "description": "Home Mortgage Loan",
+      "amount": "250000.00 EUR"
+    }
+  ]
+}
+```
+
+## Bank Adapter Support
+
+Not all bank adapters support fetching loans. To check if a bank supports loans:
+
+```ruby
+bank = Bankscrap::MyBank.new(user: 'username', password: 'password')
+
+if bank.respond_to?(:fetch_loans)
+  puts "This bank supports loan fetching"
+else
+  puts "This bank does not support loan fetching"
+end
+```

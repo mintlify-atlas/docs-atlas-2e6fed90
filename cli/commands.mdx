@@ -1,0 +1,290 @@
+---
+title: CLI Commands
+description: Complete reference for all BankScrap CLI commands
+---
+
+BankScrap provides a command-line interface to interact with your bank accounts directly from the terminal. All commands follow the pattern `bankscrap [command] [bank] [options]`.
+
+## Available Commands
+
+### balance
+
+Retrieve account balance information for all your accounts.
+
+<CodeGroup>
+```bash Basic usage
+bankscrap balance BBVA --credentials user:12345678 password:my_password
+```
+
+```bash With IBAN filter
+bankscrap balance BBVA --credentials user:12345678 password:my_password --iban ES1234567890
+```
+
+```bash Export to CSV
+bankscrap balance BBVA --credentials user:12345678 password:my_password --format csv --output accounts.csv
+```
+</CodeGroup>
+
+**Terminal Output:**
+
+```
+Account: Main Account (ES7921000813610123456789)
+Balance: €2,450.00
+Available: €2,400.00
+
+Account: Savings Account (ES1234567890123456789012)
+Balance: €10,523.45
+```
+
+<Note>
+The "Available" balance is only shown when it differs from the regular balance, indicating pending transactions or holds.
+</Note>
+
+### transactions
+
+Fetch transaction history for an account.
+
+<CodeGroup>
+```bash Recent transactions
+bankscrap transactions BBVA --credentials user:12345678 password:my_password
+```
+
+```bash Date range filter
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --from 01-01-2024 \
+  --to 31-01-2024
+```
+
+```bash Specific account
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --iban ES7921000813610123456789
+```
+
+```bash Export to JSON
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --format json \
+  --output transactions.json
+```
+</CodeGroup>
+
+**Terminal Output:**
+
+```
+Transactions for: Main Account (ES7921000813610123456789)
+
+DATE         DESCRIPTION                                           AMOUNT         BALANCE
+---------------------------------------------------------------------------------------------------
+15/01/2024   Salary Deposit - Company ABC                       €2,500.00      €5,450.00
+14/01/2024   Grocery Store - Downtown                             €-85.50      €2,950.00
+13/01/2024   ATM Withdrawal                                      €-100.00      €3,035.50
+12/01/2024   Electric Company - Monthly Bill                      €-65.30      €3,135.50
+```
+
+<Note>
+Positive amounts are displayed in green, negative amounts in red when viewing in a color-enabled terminal.
+</Note>
+
+**Options:**
+- `--from` - Start date in format `DD-MM-YYYY`
+- `--to` - End date in format `DD-MM-YYYY`
+- `--iban` - Filter transactions for a specific account
+
+<Warning>
+The `--from` date must be earlier than the `--to` date. Dates must use the format `DD-MM-YYYY` (e.g., `31-12-2024`).
+</Warning>
+
+### cards
+
+Retrieve information about your credit and debit cards.
+
+<CodeGroup>
+```bash View all cards
+bankscrap cards BBVA --credentials user:12345678 password:my_password
+```
+
+```bash Export to CSV
+bankscrap cards BBVA \
+  --credentials user:12345678 password:my_password \
+  --format csv \
+  --output cards.csv
+```
+</CodeGroup>
+
+**Terminal Output:**
+
+```
+Card: VISA Gold Premium Card €-245.50
+Card: Mastercard Debit Personal Account €0.00
+```
+
+### loans
+
+Fetch information about your active loans.
+
+<CodeGroup>
+```bash View all loans
+bankscrap loans BBVA --credentials user:12345678 password:my_password
+```
+
+```bash Export to JSON
+bankscrap loans BBVA \
+  --credentials user:12345678 password:my_password \
+  --format json \
+  --output loans.json
+```
+</CodeGroup>
+
+**Terminal Output:**
+
+```
+Loan: Home Mortgage Loan #123456 €-150,000.00
+Loan: Car Loan Personal Vehicle €-12,500.00
+```
+
+### generate_adapter
+
+Generate a template for creating a new bank adapter.
+
+```bash
+bankscrap generate_adapter MyBankName
+```
+
+This command scaffolds the necessary files and structure to build support for a new bank. See the [Building Adapters](/adapters/generator) guide for more information.
+
+## Global Options
+
+These options are available for all commands:
+
+### --credentials
+
+Provide authentication credentials as key-value pairs.
+
+<CodeGroup>
+```bash Username and password
+bankscrap balance BBVA --credentials user:12345678 password:my_password
+```
+
+```bash Multiple credential fields
+bankscrap balance BBVA \
+  --credentials user:12345678 password:my_password document:Y1234567Z
+```
+</CodeGroup>
+
+<Note>
+The required credential fields vary by bank. Check your bank adapter's documentation for specific requirements.
+</Note>
+
+### --iban
+
+Filter operations to a specific account by IBAN.
+
+```bash
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --iban ES7921000813610123456789
+```
+
+### --format
+
+Export data in a specific format. Supported formats: `csv`, `json`.
+
+```bash
+bankscrap balance BBVA \
+  --credentials user:12345678 password:my_password \
+  --format csv
+```
+
+### --output
+
+Specify the output file path for exports. Use `-` for stdout.
+
+<CodeGroup>
+```bash Save to file
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --format json \
+  --output ~/Downloads/transactions.json
+```
+
+```bash Output to stdout
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --format json \
+  --output -
+```
+</CodeGroup>
+
+### --log
+
+Enable logging output.
+
+```bash
+bankscrap balance BBVA \
+  --credentials user:12345678 password:my_password \
+  --log
+```
+
+### --debug
+
+Enable debug mode with verbose output.
+
+```bash
+bankscrap balance BBVA \
+  --credentials user:12345678 password:my_password \
+  --debug
+```
+
+<Warning>
+Debug mode may output sensitive information including credentials. Only use in development environments.
+</Warning>
+
+## Command Workflow
+
+<Steps>
+  <Step title="Authenticate with bank">
+    BankScrap connects to your bank using the provided credentials
+  </Step>
+  
+  <Step title="Fetch requested data">
+    The command retrieves accounts, transactions, cards, or loans from the bank's API
+  </Step>
+  
+  <Step title="Display or export">
+    Data is either displayed in the terminal with formatted output or exported to a file
+  </Step>
+</Steps>
+
+## Error Handling
+
+### Invalid Bank Name
+
+```bash
+$ bankscrap balance InvalidBank --credentials user:123 password:pass
+Invalid bank name.
+```
+
+Make sure the bank adapter is installed: `gem install bankscrap-bbva`
+
+### Invalid Date Format
+
+```bash
+$ bankscrap transactions BBVA --credentials user:123 password:pass --from 2024-01-01
+Invalid date format. Correct format d-m-Y (eg: 31-12-2016)
+```
+
+### Date Range Error
+
+```bash
+$ bankscrap transactions BBVA --credentials user:123 password:pass --from 31-12-2024 --to 01-01-2024
+From date must be lower than to date
+```
+
+### Unsupported Export Format
+
+```bash
+$ bankscrap balance BBVA --credentials user:123 password:pass --format xml
+Sorry, file format not supported.
+```

@@ -1,0 +1,140 @@
+---
+title: 'Using the Adapter Generator'
+description: 'Generate a new BankScrap adapter with the built-in generator'
+---
+
+The BankScrap adapter generator creates a complete project structure for building a new bank adapter, including all necessary files and boilerplate code.
+
+## Installation
+
+Before using the generator, install the bankscrap gem:
+
+```bash
+gem install bankscrap
+```
+
+## Generating an Adapter
+
+<Steps>
+  <Step title="Run the generator">
+    Use the `bankscrap generate_adapter` command with your bank's name:
+
+    ```bash
+    bankscrap generate_adapter BankName
+    ```
+
+    Replace `BankName` with your bank's name (e.g., `HSBC`, `ChaseBank`, `WellsFargo`).
+  </Step>
+
+  <Step title="Review the generated structure">
+    The generator creates a complete gem structure:
+
+    ```
+    bankscrap-bank-name/
+    ├── bankscrap-bank-name.gemspec
+    ├── .gitignore
+    ├── Gemfile
+    ├── LICENSE.txt
+    ├── README.md
+    ├── Rakefile
+    └── lib/
+        ├── bankscrap-bank-name.rb
+        └── bankscrap/
+            └── bank-name/
+                ├── bank.rb
+                └── version.rb
+    ```
+  </Step>
+
+  <Step title="Initialize git repository">
+    Navigate to the newly created directory and initialize git:
+
+    ```bash
+    cd bankscrap-bank-name
+    git init
+    git add .
+    git commit -m "Initial commit from generator"
+    ```
+  </Step>
+
+  <Step title="Start implementing">
+    The main file to edit is:
+
+    ```
+    lib/bankscrap/bank-name/bank.rb
+    ```
+
+    This file contains template code with comments guiding you through the implementation.
+  </Step>
+</Steps>
+
+## Generated Files
+
+### Gemspec File
+
+The `.gemspec` file contains the gem metadata. Update the following fields:
+
+- `spec.authors` - Your name
+- `spec.email` - Your email address
+- `spec.summary` - A brief description of the adapter
+- `spec.homepage` - GitHub repository URL
+
+### Bank Implementation File
+
+The main `bank.rb` file includes:
+
+- **Endpoint constants** - Define your API URLs
+- **REQUIRED_CREDENTIALS** - Specify what credentials are needed
+- **initialize** - Constructor for custom setup
+- **login** - Authentication method
+- **fetch_accounts** - Retrieve user accounts
+- **fetch_transactions_for** - Get account transactions
+- **fetch_loans** - (Optional) Retrieve loans
+- **fetch_cards** - (Optional) Retrieve credit cards
+- **Builder methods** - Convert API data to BankScrap objects
+
+### README Template
+
+The generated README includes:
+
+- Installation instructions
+- Usage examples (CLI and Ruby)
+- Credential requirements
+- Contributing guidelines
+
+<Note>
+The generator uses Thor templates with variable interpolation. Your bank name is automatically converted to the correct format (dasherized for file names, module case for Ruby modules).
+</Note>
+
+## Name Formatting
+
+The generator automatically handles name formatting:
+
+| Input | Gem Name | Module Name | File Path |
+|-------|----------|-------------|----------|
+| `HSBC` | `bankscrap-hsbc` | `Bankscrap::HSBC` | `lib/bankscrap/hsbc/bank.rb` |
+| `ChaseBank` | `bankscrap-chase-bank` | `Bankscrap::ChaseBank` | `lib/bankscrap/chase-bank/bank.rb` |
+| `WellsFargo` | `bankscrap-wells-fargo` | `Bankscrap::WellsFargo` | `lib/bankscrap/wells-fargo/bank.rb` |
+
+## Next Steps
+
+After generating your adapter:
+
+1. **Define credentials** - Update `REQUIRED_CREDENTIALS` constant
+2. **Implement login** - Add authentication logic
+3. **Fetch accounts** - Implement account retrieval
+4. **Fetch transactions** - Implement transaction retrieval
+5. **Test thoroughly** - Ensure all methods work correctly
+6. **Publish** - Push to GitHub and share with the community
+
+<Warning>
+Before publishing your adapter, ensure you're not exposing any sensitive information like API keys, credentials, or proprietary bank data in your code.
+</Warning>
+
+## Getting Help
+
+If you need assistance while building your adapter:
+
+- Check existing adapters for examples: [bankscrap-bbva](https://github.com/bankscrap/bankscrap-bbva), [bankscrap-ing](https://github.com/bankscrap/bankscrap-ing)
+- Open an issue on [GitHub](https://github.com/bankscrap/bankscrap/issues)
+- Reference the generated template code comments

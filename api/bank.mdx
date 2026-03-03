@@ -1,0 +1,177 @@
+---
+title: 'Bankscrap::Bank'
+description: 'Base class for bank adapters'
+---
+
+## Overview
+
+The `Bankscrap::Bank` class is the base class for all bank adapters. It provides the core functionality for authentication, fetching accounts, and managing financial data.
+
+## Class Attributes
+
+<ResponseField name="headers" type="Hash">
+  HTTP headers used for requests to the bank's API
+</ResponseField>
+
+<ResponseField name="accounts" type="Array<Bankscrap::Account>">
+  List of accounts fetched from the bank
+</ResponseField>
+
+<ResponseField name="cards" type="Array<Bankscrap::Card>">
+  List of cards fetched from the bank (if supported by adapter)
+</ResponseField>
+
+<ResponseField name="loans" type="Array<Bankscrap::Loan>">
+  List of loans fetched from the bank (if supported by adapter)
+</ResponseField>
+
+<ResponseField name="investments" type="Array<Bankscrap::Investment>">
+  List of investments fetched from the bank (if supported by adapter)
+</ResponseField>
+
+## Constants
+
+<ResponseField name="REQUIRED_CREDENTIALS" type="Array<Symbol>">
+  Array of required credential symbols: `[:user, :password]`
+</ResponseField>
+
+<ResponseField name="WEB_USER_AGENT" type="String">
+  Default user agent string for HTTP requests
+</ResponseField>
+
+## Methods
+
+### initialize(credentials = {})
+
+Initializes a new bank instance with the provided credentials.
+
+<ParamField path="credentials" type="Hash" default="{}">
+  Hash containing authentication credentials
+  
+  <Expandable title="properties">
+    <ParamField path="user" type="String" required>
+      Username for bank authentication
+    </ParamField>
+    
+    <ParamField path="password" type="String" required>
+      Password for bank authentication
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Raises:**
+- `MissingCredential` - If required credentials are missing
+
+**Example:**
+
+```ruby
+bank = Bankscrap::MyBank.new(
+  user: 'your_username',
+  password: 'your_password'
+)
+```
+
+### account_with_iban(iban)
+
+Finds an account by its IBAN number.
+
+<ParamField path="iban" type="String" required>
+  The IBAN number to search for (spaces are ignored)
+</ParamField>
+
+**Returns:** `Bankscrap::Account` or `nil`
+
+**Example:**
+
+```ruby
+account = bank.account_with_iban('ES1234567890123456789012')
+if account
+  puts account.balance
+end
+```
+
+### login
+
+Abstract method that must be implemented by bank adapters. Performs authentication with the bank.
+
+**Raises:**
+- `RuntimeError` - If not implemented by subclass
+
+### fetch_accounts
+
+Abstract method that must be implemented by bank adapters. Fetches all accounts from the bank.
+
+**Returns:** `Array<Bankscrap::Account>`
+
+**Raises:**
+- `RuntimeError` - If not implemented by subclass
+
+### fetch_transactions_for(account, start_date: nil, end_date: nil)
+
+Abstract method that must be implemented by bank adapters. Fetches transactions for a specific account.
+
+<ParamField path="account" type="Bankscrap::Account" required>
+  The account to fetch transactions for
+</ParamField>
+
+<ParamField path="start_date" type="Date">
+  Start date for transaction range
+</ParamField>
+
+<ParamField path="end_date" type="Date">
+  End date for transaction range
+</ParamField>
+
+**Returns:** `Array<Bankscrap::Transaction>`
+
+**Raises:**
+- `RuntimeError` - If not implemented by subclass
+
+### fetch_investments
+
+Optional method that can be implemented by bank adapters to fetch investment products.
+
+**Returns:** `Array<Bankscrap::Investment>`
+
+### fetch_loans
+
+Optional method that can be implemented by bank adapters to fetch loan products.
+
+**Returns:** `Array<Bankscrap::Loan>`
+
+### fetch_cards
+
+Optional method that can be implemented by bank adapters to fetch card products.
+
+**Returns:** `Array<Bankscrap::Card>`
+
+## Creating a Custom Adapter
+
+To create a custom bank adapter, subclass `Bankscrap::Bank` and implement the required methods:
+
+```ruby
+module Bankscrap
+  class MyBank < Bank
+    REQUIRED_CREDENTIALS = [:user, :password].freeze
+    
+    def login
+      # Implement authentication logic
+    end
+    
+    def fetch_accounts
+      # Return array of Bankscrap::Account objects
+    end
+    
+    def fetch_transactions_for(account, start_date: nil, end_date: nil)
+      # Return array of Bankscrap::Transaction objects
+    end
+  end
+end
+```
+
+## Environment Variables
+
+Credentials can also be provided via environment variables using the pattern:
+`BANKSCRAP_{ADAPTER_NAME}_{CREDENTIAL}`, for example:
+- `BANKSCRAP_MY_BANK_USER`
+- `BANKSCRAP_MY_BANK_PASSWORD`

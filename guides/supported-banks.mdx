@@ -1,0 +1,78 @@
+---
+title: 'Supported Banks'
+description: 'List of supported banks and their adapters'
+---
+
+BankScrap supports multiple banks through dedicated adapter gems. Each adapter implements the necessary authentication and data extraction logic for its specific bank.
+
+## Available Banks
+
+<CardGroup cols={2}>
+  <Card title="BBVA" icon="building-columns" href="https://github.com/bankscrap/bankscrap-bbva">
+    Personal accounts adapter for BBVA
+  </Card>
+  
+  <Card title="BBVA Net Cash" icon="briefcase" href="https://github.com/bankscrap/bankscrap-bbva-net-cash">
+    Business accounts adapter for BBVA
+  </Card>
+  
+  <Card title="ING Direct" icon="building-columns" href="https://github.com/bankscrap/bankscrap-ing">
+    Adapter for ING Direct
+  </Card>
+  
+  <Card title="Arquia Banca" icon="building-columns" href="https://github.com/bankscrap/bankscrap-arquia">
+    Adapter for Arquia Banca
+  </Card>
+  
+  <Card title="Openbank" icon="building-columns" href="https://github.com/bankscrap/bankscrap-openbank">
+    Adapter for Openbank
+  </Card>
+  
+  <Card title="Sabadell" icon="building-columns" href="https://github.com/bankscrap/bankscrap-sabadell">
+    Adapter for Banco Sabadell
+  </Card>
+  
+  <Card title="Ibercaja" icon="building-columns" href="https://github.com/bankscrap/bankscrap-ibercaja">
+    Adapter for Ibercaja
+  </Card>
+  
+  <Card title="Santander" icon="building-columns" href="https://github.com/bankscrap/bankscrap-santander">
+    Adapter for Santander (Work in Progress)
+  </Card>
+  
+  <Card title="Shinsei Bank" icon="building-columns" href="https://github.com/bankscrap/bankscrap-shinsei">
+    Adapter for Shinsei Bank
+  </Card>
+</CardGroup>
+
+## Installation
+
+You only need to install the gem for your specific bank. The main `bankscrap` gem will be installed automatically as a dependency.
+
+### Using RubyGems
+
+```bash
+# Example: BBVA
+gem install bankscrap-bbva
+
+# Example: ING
+gem install bankscrap-ing
+```
+
+### Using Bundler
+
+Add to your `Gemfile`:
+
+```ruby
+# Example: BBVA
+gem 'bankscrap-bbva'
+
+# Example: ING
+gem 'bankscrap-ing'
+```
+
+## Request a New Bank
+
+Interested in adding support for another bank? [Open an issue](https://github.com/bankscrap/bankscrap/issues) on the main repository and the community will try to help.
+
+You can also contribute by [creating your own adapter](/adapters/generator) using the bankscrap generator.

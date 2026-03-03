@@ -1,0 +1,445 @@
+---
+title: 'Testing Adapters'
+description: 'Best practices for testing BankScrap adapters'
+---
+
+Testing your adapter ensures it works correctly and helps prevent regressions when making changes.
+
+## Testing Strategy
+
+BankScrap adapters should have multiple levels of testing:
+
+1. **Unit tests** - Test individual methods in isolation
+2. **Integration tests** - Test the full authentication and data fetching flow
+3. **Manual testing** - Verify with real credentials in development
+
+## Setting Up RSpec
+
+The generated adapter includes a basic test structure. Add RSpec to your gemspec:
+
+```ruby bankscrap-my-bank.gemspec
+spec.add_development_dependency 'rspec', '~> 3.0'
+spec.add_development_dependency 'webmock', '~> 3.0'
+spec.add_development_dependency 'vcr', '~> 6.0'
+```
+
+Install dependencies:
+
+```bash
+bundle install
+```
+
+Create the spec directory structure:
+
+```bash
+mkdir -p spec/fixtures/vcr_cassettes
+```
+
+## Spec Helper
+
+Create a spec helper to configure your tests:
+
+```ruby spec/spec_helper.rb
+require 'bankscrap-my-bank'
+require 'webmock/rspec'
+require 'vcr'
+
+VCR.configure do |config|
+  config.cassette_library_dir = 'spec/fixtures/vcr_cassettes'
+  config.hook_into :webmock
+  config.configure_rspec_metadata!
+  
+  # Filter sensitive data
+  config.filter_sensitive_data('<USER>') { ENV['BANKSCRAP_MY_BANK_USER'] }
+  config.filter_sensitive_data('<PASSWORD>') { ENV['BANKSCRAP_MY_BANK_PASSWORD'] }
+  config.filter_sensitive_data('<TOKEN>') do |interaction|
+    interaction.response.headers['Authorization']&.first
+  end
+end
+
+RSpec.configure do |config|
+  config.expect_with :rspec do |expectations|
+    expectations.include_chain_clauses_in_custom_matcher_descriptions = true
+  end
+
+  config.mock_with :rspec do |mocks|
+    mocks.verify_partial_doubles = true
+  end
+
+  config.shared_context_metadata_behavior = :apply_to_host_groups
+end
+```
+
+## Unit Tests
+
+Test individual methods with mocked HTTP responses:
+
+```ruby spec/bank_spec.rb
+require 'spec_helper'
+
+describe Bankscrap::MyBank::Bank do
+  let(:credentials) do
+    {
+      user: 'test_user',
+      password: 'test_password'
+    }
+  end
+
+  describe '#initialize' do
+    it 'sets credentials as instance variables' do
+      # Stub login and fetch methods
+      allow_any_instance_of(described_class).to receive(:login)
+      allow_any_instance_of(described_class).to receive(:fetch_accounts).and_return([])
+      
+      bank = described_class.new(credentials)
+      
+      expect(bank.instance_variable_get(:@user)).to eq('test_user')
+      expect(bank.instance_variable_get(:@password)).to eq('test_password')
+    end
+
+    context 'with missing credentials' do
+      it 'raises an error' do
+        expect {
+          described_class.new(user: 'test_user')
+        }.to raise_error(Bankscrap::Bank::MissingCredential)
+      end
+    end
+  end
+
+  describe '#fetch_accounts', :vcr do
+    it 'returns an array of Account objects' do
+      bank = described_class.new(credentials)
+      accounts = bank.accounts
+      
+      expect(accounts).to be_an(Array)
+      expect(accounts.first).to be_a(Bankscrap::Account)
+    end
+
+    it 'sets account attributes correctly' do
+      bank = described_class.new(credentials)
+      account = bank.accounts.first
+      
+      expect(account.id).to be_present
+      expect(account.name).to be_present
+      expect(account.balance).to be_a(Money)
+      expect(account.available_balance).to be_a(Money)
+    end
+  end
+
+  describe '#fetch_transactions_for', :vcr do
+    it 'returns an array of Transaction objects' do
+      bank = described_class.new(credentials)
+      account = bank.accounts.first
+      
+      transactions = bank.fetch_transactions_for(
+        account,
+        start_date: Date.today - 30,
+        end_date: Date.today
+      )
+      
+      expect(transactions).to be_an(Array)
+      expect(transactions.first).to be_a(Bankscrap::Transaction)
+    end
+
+    it 'sets transaction attributes correctly' do
+      bank = described_class.new(credentials)
+      account = bank.accounts.first
+      transactions = bank.fetch_transactions_for(account)
+      transaction = transactions.first
+      
+      expect(transaction.id).to be_present
+      expect(transaction.amount).to be_a(Money)
+      expect(transaction.description).to be_present
+      expect(transaction.effective_date).to be_a(Date)
+    end
+  end
+end
+```
+
+## Using VCR for HTTP Recording
+
+VCR records HTTP interactions and replays them in tests:
+
+<Steps>
+  <Step title="Record real interactions">
+    Run tests with real credentials the first time:
+
+    ```bash
+    BANKSCRAP_MY_BANK_USER=real_user \
+    BANKSCRAP_MY_BANK_PASSWORD=real_password \
+    rspec spec/bank_spec.rb
+    ```
+
+    VCR will record all HTTP requests to `spec/fixtures/vcr_cassettes/`.
+  </Step>
+
+  <Step title="Sensitive data is filtered">
+    The spec helper filters credentials and tokens automatically.
+  </Step>
+
+  <Step title="Subsequent runs use recordings">
+    Future test runs will use the recorded cassettes instead of making real requests.
+  </Step>
+
+  <Step title="Re-record when needed">
+    Delete cassettes to re-record:
+
+    ```bash
+    rm -rf spec/fixtures/vcr_cassettes/
+    rspec spec/bank_spec.rb
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+Always review VCR cassettes before committing to ensure no sensitive data is included.
+</Warning>
+
+## Stubbing HTTP Requests
+
+For unit tests, stub HTTP responses with WebMock:
+
+```ruby spec/bank_spec.rb
+require 'spec_helper'
+
+describe Bankscrap::MyBank::Bank do
+  describe '#fetch_accounts' do
+    it 'parses account data correctly' do
+      # Stub login
+      allow_any_instance_of(described_class).to receive(:login)
+      
+      # Stub accounts endpoint
+      stub_request(:get, 'https://api.mybank.com/accounts')
+        .to_return(
+          status: 200,
+          body: {
+            data: [
+              {
+                id: '12345',
+                name: 'Checking Account',
+                balance: 1000.50,
+                available: 950.25,
+                currency: 'EUR',
+                iban: 'ES1234567890'
+              }
+            ]
+          }.to_json,
+          headers: { 'Content-Type' => 'application/json' }
+        )
+      
+      bank = described_class.new(user: 'test', password: 'test')
+      accounts = bank.accounts
+      
+      expect(accounts.length).to eq(1)
+      expect(accounts.first.id).to eq('12345')
+      expect(accounts.first.balance).to eq(Money.new(100050, 'EUR'))
+    end
+  end
+end
+```
+
+## Testing Error Handling
+
+```ruby spec/bank_spec.rb
+describe 'error handling' do
+  it 'raises an error on failed login' do
+    stub_request(:post, 'https://api.mybank.com/login')
+      .to_return(
+        status: 401,
+        body: { error: 'Invalid credentials' }.to_json
+      )
+    
+    expect {
+      described_class.new(user: 'bad', password: 'bad')
+    }.to raise_error(/Invalid credentials/)
+  end
+
+  it 'handles network errors gracefully' do
+    allow_any_instance_of(described_class).to receive(:login)
+    
+    stub_request(:get, 'https://api.mybank.com/accounts')
+      .to_timeout
+    
+    bank = described_class.new(user: 'test', password: 'test')
+    
+    expect {
+      bank.send(:fetch_accounts)
+    }.to raise_error(Timeout::Error)
+  end
+end
+```
+
+## Testing with Different Scenarios
+
+```ruby spec/bank_spec.rb
+describe '#fetch_transactions_for' do
+  let(:bank) { described_class.new(user: 'test', password: 'test') }
+  let(:account) { bank.accounts.first }
+
+  context 'with transactions' do
+    it 'returns all transactions' do
+      stub_request(:get, %r{/transactions})
+        .to_return(
+          status: 200,
+          body: { data: [{ id: '1', amount: 100, description: 'Test' }] }.to_json
+        )
+      
+      transactions = bank.fetch_transactions_for(account)
+      expect(transactions.length).to eq(1)
+    end
+  end
+
+  context 'with no transactions' do
+    it 'returns empty array' do
+      stub_request(:get, %r{/transactions})
+        .to_return(
+          status: 200,
+          body: { data: [] }.to_json
+        )
+      
+      transactions = bank.fetch_transactions_for(account)
+      expect(transactions).to be_empty
+    end
+  end
+
+  context 'with pagination' do
+    it 'fetches all pages' do
+      stub_request(:get, %r{/transactions.*page=1})
+        .to_return(
+          body: { data: [{ id: '1' }], has_more: true }.to_json
+        )
+      
+      stub_request(:get, %r{/transactions.*page=2})
+        .to_return(
+          body: { data: [{ id: '2' }], has_more: false }.to_json
+        )
+      
+      transactions = bank.fetch_transactions_for(account)
+      expect(transactions.length).to eq(2)
+    end
+  end
+end
+```
+
+## Manual Testing
+
+Always test with real credentials before releasing:
+
+```ruby test_manual.rb
+require 'bankscrap-my-bank'
+
+# Enable logging
+Bankscrap.log = true
+
+bank = Bankscrap::MyBank::Bank.new(
+  user: ENV['BANKSCRAP_MY_BANK_USER'],
+  password: ENV['BANKSCRAP_MY_BANK_PASSWORD']
+)
+
+puts "Accounts:"
+bank.accounts.each do |account|
+  puts "  #{account.name}: #{account.balance}"
+end
+
+puts "\nTransactions (last 30 days):"
+account = bank.accounts.first
+transactions = account.fetch_transactions(
+  start_date: Date.today - 30,
+  end_date: Date.today
+)
+
+transactions.first(10).each do |txn|
+  puts "  #{txn.effective_date} | #{txn.amount} | #{txn.description}"
+end
+```
+
+Run it:
+
+```bash
+ruby test_manual.rb
+```
+
+## Continuous Integration
+
+Add a GitHub Actions workflow:
+
+```yaml .github/workflows/test.yml
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 3.0
+        bundler-cache: true
+    
+    - name: Run tests
+      run: bundle exec rspec
+```
+
+## Test Coverage
+
+Add SimpleCov for coverage reports:
+
+```ruby spec/spec_helper.rb
+require 'simplecov'
+SimpleCov.start do
+  add_filter '/spec/'
+end
+
+require 'bankscrap-my-bank'
+# ... rest of spec_helper
+```
+
+Add to gemspec:
+
+```ruby
+spec.add_development_dependency 'simplecov', '~> 0.21'
+```
+
+Run tests and check coverage:
+
+```bash
+bundle exec rspec
+open coverage/index.html
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Always use VCR or stubs">
+    Don't make real API calls in automated tests.
+  </Step>
+
+  <Step title="Filter sensitive data">
+    Use VCR filters to remove credentials, tokens, and personal information.
+  </Step>
+
+  <Step title="Test edge cases">
+    Test empty responses, errors, pagination, etc.
+  </Step>
+
+  <Step title="Test all methods">
+    Ensure `login`, `fetch_accounts`, and `fetch_transactions_for` all have tests.
+  </Step>
+
+  <Step title="Manual testing before release">
+    Always test with real credentials in development.
+  </Step>
+
+  <Step title="Keep tests up to date">
+    When the bank changes their API, update your tests and VCR cassettes.
+  </Step>
+</Steps>
+
+<Note>
+Good tests make your adapter more reliable and easier to maintain. Invest time in testing early.
+</Note>

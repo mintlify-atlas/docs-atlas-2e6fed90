@@ -1,0 +1,194 @@
+---
+title: 'Bankscrap::Transaction'
+description: 'Represents a bank transaction'
+---
+
+## Overview
+
+The `Bankscrap::Transaction` class represents a single financial transaction on a bank account.
+
+## Attributes
+
+<ResponseField name="id" type="String">
+  Transaction identifier
+</ResponseField>
+
+<ResponseField name="amount" type="Money" required>
+  Transaction amount (must be a Money object). Positive for credits, negative for debits.
+</ResponseField>
+
+<ResponseField name="description" type="String">
+  Primary transaction description
+</ResponseField>
+
+<ResponseField name="description_detail" type="String">
+  Additional transaction details
+</ResponseField>
+
+<ResponseField name="effective_date" type="Date">
+  Date when the transaction was effective (posted to account)
+</ResponseField>
+
+<ResponseField name="operation_date" type="Date">
+  Date when the transaction operation occurred
+</ResponseField>
+
+<ResponseField name="balance" type="Money">
+  Account balance after this transaction
+</ResponseField>
+
+<ResponseField name="account" type="Bankscrap::Account">
+  Reference to the account this transaction belongs to
+</ResponseField>
+
+## Methods
+
+### initialize(params = {})
+
+Creates a new transaction instance.
+
+<ParamField path="params" type="Hash" default="{}">
+  Transaction attributes
+  
+  <Expandable title="properties">
+    <ParamField path="id" type="String">
+      Transaction identifier
+    </ParamField>
+    
+    <ParamField path="amount" type="Money" required>
+      Transaction amount (must be Money object)
+    </ParamField>
+    
+    <ParamField path="description" type="String">
+      Transaction description
+    </ParamField>
+    
+    <ParamField path="description_detail" type="String">
+      Additional details
+    </ParamField>
+    
+    <ParamField path="effective_date" type="Date">
+      Effective date
+    </ParamField>
+    
+    <ParamField path="operation_date" type="Date">
+      Operation date
+    </ParamField>
+    
+    <ParamField path="balance" type="Money">
+      Balance after transaction
+    </ParamField>
+    
+    <ParamField path="account" type="Bankscrap::Account">
+      Associated account
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Raises:**
+- `NotMoneyObjectError` - If amount is not a Money object
+
+**Example:**
+
+```ruby
+transaction = Bankscrap::Transaction.new(
+  id: 'TXN123456',
+  amount: Money.new(-5000, 'EUR'),  # -50.00 EUR (debit)
+  description: 'Grocery Store',
+  description_detail: 'SUPERMARKET PURCHASE',
+  effective_date: Date.today,
+  operation_date: Date.today - 1,
+  balance: Money.new(95000, 'EUR'),
+  account: account
+)
+```
+
+### currency
+
+Returns the currency of the transaction amount.
+
+**Returns:** `Money::Currency`
+
+**Example:**
+
+```ruby
+puts transaction.currency.iso_code # => "EUR"
+```
+
+### to_s
+
+Returns the string representation of the transaction (description).
+
+**Returns:** `String`
+
+### to_a
+
+Converts transaction to array format for CSV export.
+
+**Returns:** `Array` - `[id, formatted_date, description, description_detail, amount]`
+
+**Example:**
+
+```ruby
+transaction.to_a
+# => ["TXN123456", "03/03/2026", "Grocery Store", "SUPERMARKET PURCHASE", #<Money ...>]
+```
+
+## Usage Examples
+
+### Fetching and Displaying Transactions
+
+```ruby
+# Get transactions for an account
+transactions = account.fetch_transactions(
+  start_date: Date.today - 30,
+  end_date: Date.today
+)
+
+# Display transactions
+transactions.each do |transaction|
+  puts "#{transaction.effective_date.strftime('%Y-%m-%d')}"
+  puts "  #{transaction.description}"
+  puts "  Amount: #{transaction.amount.format}"
+  puts "  Balance: #{transaction.balance.format}" if transaction.balance
+  puts ""
+end
+```
+
+### Filtering Transactions
+
+```ruby
+# Find all debits (negative amounts)
+debits = transactions.select { |t| t.amount.negative? }
+
+# Find all credits (positive amounts)
+credits = transactions.select { |t| t.amount.positive? }
+
+# Calculate total spent
+total_spent = debits.sum(&:amount)
+puts "Total spent: #{total_spent.format}"
+```
+
+### Grouping by Description
+
+```ruby
+# Group transactions by description
+grouped = transactions.group_by(&:description)
+
+grouped.each do |desc, txns|
+  total = txns.sum(&:amount)
+  puts "#{desc}: #{total.format} (#{txns.count} transactions)"
+end
+```
+
+### Exporting Transactions
+
+```ruby
+# Export to CSV
+exporter = BankScrap::Exporter::Csv.new(account)
+exporter.write_to_file(transactions, 'transactions.csv')
+
+# Export to JSON
+exporter = BankScrap::Exporter::Json.new(account)
+exporter.write_to_file(transactions, 'transactions.json')
+```

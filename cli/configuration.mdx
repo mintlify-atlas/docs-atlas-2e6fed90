@@ -1,0 +1,311 @@
+---
+title: CLI Configuration
+description: Configuration options and best practices for the BankScrap CLI
+---
+
+The BankScrap CLI can be configured through command-line options. This page covers all configuration options, environment setup, and best practices.
+
+## Credentials Configuration
+
+Credentials are passed using the `--credentials` flag with key-value pairs.
+
+### Basic Credentials
+
+Most banks require a username and password:
+
+```bash
+bankscrap balance BBVA --credentials user:12345678 password:my_password
+```
+
+### Multiple Credential Fields
+
+Some banks require additional authentication fields:
+
+<CodeGroup>
+```bash With document ID
+bankscrap balance BBVA \
+  --credentials user:12345678 password:my_password document:Y1234567Z
+```
+
+```bash With multiple fields
+bankscrap balance BankName \
+  --credentials username:john@example.com password:secret pin:1234 device_id:ABC123
+```
+</CodeGroup>
+
+<Note>
+Credential field names depend on the bank adapter implementation. Check your specific bank adapter's documentation for required fields.
+</Note>
+
+## Logging Configuration
+
+### Standard Logging
+
+Enable basic logging to see connection and request information:
+
+```bash
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --log
+```
+
+**Example output:**
+```
+[LOG] Connecting to BBVA...
+[LOG] Fetching accounts...
+[LOG] Fetching transactions for account ES7921000813610123456789...
+
+Transactions for: Main Account (ES7921000813610123456789)
+...
+```
+
+### Debug Mode
+
+Enable detailed debug output for troubleshooting:
+
+```bash
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --debug
+```
+
+<Warning>
+Debug mode outputs verbose information that may include:
+- HTTP requests and responses
+- API endpoints
+- Credential data
+- Session tokens
+
+Only use debug mode in secure development environments. Never share debug logs publicly.
+</Warning>
+
+## Account Filtering
+
+### Filter by IBAN
+
+When you have multiple accounts, use the `--iban` flag to target a specific one:
+
+```bash
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --iban ES7921000813610123456789
+```
+
+<Note>
+If no IBAN is specified, BankScrap uses the first account returned by the bank.
+</Note>
+
+## Export Configuration
+
+### Output Format
+
+Choose between CSV and JSON formats:
+
+<CodeGroup>
+```bash CSV format
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --format csv
+```
+
+```bash JSON format
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --format json
+```
+</CodeGroup>
+
+### Output Destination
+
+Control where exported data is written:
+
+<CodeGroup>
+```bash Default filename
+# Automatically named: transactions.json, accounts.csv, etc.
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --format json
+```
+
+```bash Custom filename
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --format json \
+  --output ~/Downloads/my-transactions.json
+```
+
+```bash Stdout (pipe to other commands)
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --format json \
+  --output - | jq '.transactions[] | select(.amount > 0)'
+```
+</CodeGroup>
+
+## Date Range Configuration
+
+For the `transactions` command, configure the date range:
+
+### Date Format
+
+Dates must use the format `DD-MM-YYYY`:
+
+```bash
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --from 01-01-2024 \
+  --to 31-01-2024
+```
+
+### Common Date Patterns
+
+<CodeGroup>
+```bash Current month
+# Use dynamic date generation
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --from $(date +01-%m-%Y) \
+  --to $(date +%d-%m-%Y)
+```
+
+```bash Last 30 days
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --from $(date -d '30 days ago' +%d-%m-%Y) \
+  --to $(date +%d-%m-%Y)
+```
+
+```bash Specific year
+bankscrap transactions BBVA \
+  --credentials user:12345678 password:my_password \
+  --from 01-01-2023 \
+  --to 31-12-2023
+```
+</CodeGroup>
+
+<Warning>
+The start date (`--from`) must be earlier than the end date (`--to`). Invalid date ranges will result in an error.
+</Warning>
+
+## Environment Best Practices
+
+### Secure Credential Storage
+
+Never hardcode credentials in scripts. Use environment variables:
+
+<Steps>
+  <Step title="Create environment file">
+    Create a `.env` file (add to `.gitignore`):
+    
+    ```bash .env
+    BANK_USER=12345678
+    BANK_PASSWORD=my_secure_password
+    BANK_DOCUMENT=Y1234567Z
+    ```
+  </Step>
+  
+  <Step title="Load environment variables">
+    Source the file before running commands:
+    
+    ```bash
+    source .env
+    ```
+  </Step>
+  
+  <Step title="Use variables in commands">
+    Reference variables in your BankScrap commands:
+    
+    ```bash
+    bankscrap balance BBVA \
+      --credentials user:$BANK_USER password:$BANK_PASSWORD document:$BANK_DOCUMENT
+    ```
+  </Step>
+</Steps>
+
+### Shell Aliases
+
+Create aliases for frequently used commands:
+
+```bash ~/.bashrc or ~/.zshrc
+alias bank-balance='bankscrap balance BBVA --credentials user:$BANK_USER password:$BANK_PASSWORD'
+alias bank-transactions='bankscrap transactions BBVA --credentials user:$BANK_USER password:$BANK_PASSWORD'
+```
+
+Usage:
+```bash
+bank-balance
+bank-transactions --from 01-01-2024 --to 31-01-2024
+```
+
+### Script Automation
+
+Create reusable scripts for common tasks:
+
+```bash ~/bin/bank-export.sh
+#!/bin/bash
+
+DATE=$(date +%Y-%m-%d)
+OUTPUT_DIR="$HOME/Documents/Banking"
+
+mkdir -p "$OUTPUT_DIR"
+
+# Export transactions
+bankscrap transactions BBVA \
+  --credentials user:$BANK_USER password:$BANK_PASSWORD \
+  --format json \
+  --output "$OUTPUT_DIR/transactions-$DATE.json"
+
+# Export balance
+bankscrap balance BBVA \
+  --credentials user:$BANK_USER password:$BANK_PASSWORD \
+  --format json \
+  --output "$OUTPUT_DIR/balance-$DATE.json"
+
+echo "Bank data exported to $OUTPUT_DIR"
+```
+
+Make executable:
+```bash
+chmod +x ~/bin/bank-export.sh
+```
+
+## Configuration Reference
+
+### All Available Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--credentials` | Hash | `{}` | Authentication credentials as key:value pairs |
+| `--iban` | String | `nil` | Filter by specific account IBAN |
+| `--format` | String | `nil` | Export format: `csv` or `json` |
+| `--output` | String | `nil` | Output file path (use `-` for stdout) |
+| `--log` | Boolean | `false` | Enable logging output |
+| `--debug` | Boolean | `false` | Enable debug mode with verbose output |
+| `--from` | String | `nil` | Start date (DD-MM-YYYY) for transactions |
+| `--to` | String | `nil` | End date (DD-MM-YYYY) for transactions |
+
+### Command-Specific Options
+
+**balance, cards, loans:**
+- `--credentials` (required)
+- `--iban` (optional)
+- `--format` (optional)
+- `--output` (optional)
+- `--log` (optional)
+- `--debug` (optional)
+
+**transactions:**
+- All options above, plus:
+- `--from` (optional)
+- `--to` (optional)
+
+**generate_adapter:**
+- No options required, just the bank name argument
+
+## Thor CLI Framework
+
+BankScrap uses the [Thor CLI framework](https://github.com/rails/thor) internally. Understanding Thor conventions can help with advanced usage:
+
+- Options can use `--option value` or `--option=value` syntax
+- Boolean flags don't require a value: `--log` is the same as `--log=true`
+- Hash options use space or comma separation: `--credentials user:123 password:pass`

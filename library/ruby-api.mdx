@@ -1,0 +1,245 @@
+---
+title: 'Ruby API'
+description: 'Using BankScrap as a Ruby library in your applications'
+---
+
+## Overview
+
+BankScrap can be used as a library in your Ruby applications to programmatically access bank account data. This gives you full control over authentication, data fetching, and processing.
+
+## Installation
+
+Add the specific bank adapter gem to your Gemfile. The main `bankscrap` gem will be installed as a dependency:
+
+```ruby Gemfile
+# BBVA
+gem 'bankscrap-bbva'
+
+# ING Direct
+gem 'bankscrap-ing'
+
+# Other banks
+gem 'bankscrap-openbank'
+gem 'bankscrap-arquia'
+```
+
+Then run:
+
+```bash
+bundle install
+```
+
+## Basic Usage
+
+### Initializing a Bank Connection
+
+First, require the bank adapter and create a new bank instance:
+
+```ruby
+# BBVA
+require 'bankscrap-bbva'
+bbva = Bankscrap::BBVA::Bank.new(
+  user: YOUR_BBVA_USER,
+  password: YOUR_BBVA_PASSWORD
+)
+
+# ING Direct
+require 'bankscrap-ing'
+ing = Bankscrap::ING::Bank.new(
+  dni: YOUR_DNI,
+  password: YOUR_ING_PASSWORD,
+  birthday: "dd/mm/yyyy"
+)
+```
+
+The `initialize` method automatically:
+1. Validates required credentials
+2. Logs into the bank
+3. Fetches accounts, cards, loans, and investments (if supported)
+
+### Environment Variables
+
+Instead of passing credentials directly, you can use environment variables:
+
+```bash
+export BANKSCRAP_BBVA_USER=YOUR_BANK_USER
+export BANKSCRAP_BBVA_PASSWORD=YOUR_BANK_PASSWORD
+export BANKSCRAP_ING_DNI=YOUR_DNI
+export BANKSCRAP_ING_PASSWORD=YOUR_PASSWORD
+export BANKSCRAP_ING_BIRTHDAY=01/01/1980
+```
+
+Then initialize without parameters:
+
+```ruby
+require 'bankscrap-bbva'
+bbva = Bankscrap::BBVA::Bank.new
+```
+
+The naming convention is: `BANKSCRAP_[BANK_NAME]_[CREDENTIAL_FIELD]`
+
+## Accessing Bank Data
+
+### Accounts
+
+Access all accounts:
+
+```ruby
+bank.accounts
+# => [#<Bankscrap::Account>, #<Bankscrap::Account>, ...]
+```
+
+Get the first account:
+
+```ruby
+account = bank.accounts.first
+```
+
+Find account by IBAN:
+
+```ruby
+account = bank.account_with_iban('ES12 3456 7890 1234 5678 9012')
+```
+
+### Account Properties
+
+```ruby
+account.id                 # Account identifier
+account.name               # Account name
+account.iban               # IBAN number
+account.bic                # BIC/SWIFT code
+account.balance            # Money object
+account.available_balance  # Money object
+account.description        # Account description
+```
+
+### Cards
+
+If the bank adapter supports cards:
+
+```ruby
+bank.cards
+# => [#<Bankscrap::Card>, #<Bankscrap::Card>, ...]
+
+card = bank.cards.first
+card.id          # Card identifier
+card.name        # Card name
+card.pan         # Primary Account Number
+card.amount      # Money object
+card.is_credit   # Boolean
+```
+
+### Loans
+
+If the bank adapter supports loans:
+
+```ruby
+bank.loans
+# => [#<Bankscrap::Loan>, #<Bankscrap::Loan>, ...]
+
+loan = bank.loans.first
+loan.id          # Loan identifier
+loan.name        # Loan name
+loan.amount      # Money object
+loan.description # Loan description
+```
+
+### Investments
+
+If the bank adapter supports investments:
+
+```ruby
+bank.investments
+# => [#<Bankscrap::Investment>, #<Bankscrap::Investment>, ...]
+
+investment = bank.investments.first
+investment.id        # Investment identifier
+investment.name      # Investment name
+investment.balance   # Balance
+investment.currency  # Currency code
+```
+
+## Configuration Options
+
+### Logging
+
+Enable logging to see what BankScrap is doing:
+
+```ruby
+Bankscrap.log = true
+
+bank = Bankscrap::BBVA::Bank.new(user: 'user', password: 'pass')
+# Outputs log messages to STDOUT
+```
+
+### Debug Mode
+
+Enable debug mode for HTTP request/response logging:
+
+```ruby
+Bankscrap.debug = true
+
+bank = Bankscrap::BBVA::Bank.new(user: 'user', password: 'pass')
+# Outputs detailed HTTP logs
+```
+
+### Proxy Configuration
+
+Route requests through a proxy:
+
+```ruby
+Bankscrap.proxy = { host: 'localhost', port: 8888 }
+
+bank = Bankscrap::BBVA::Bank.new(user: 'user', password: 'pass')
+```
+
+## Money Objects
+
+BankScrap uses the [Money gem](https://github.com/RubyMoney/money) for all monetary values:
+
+```ruby
+account.balance
+# => #<Money fractional:125000 currency:EUR>
+
+account.balance.to_f
+# => 1250.0
+
+account.balance.format
+# => "€1,250.00"
+
+account.balance.currency
+# => #<Money::Currency id: eur>
+```
+
+## Working in IRB
+
+For development and testing, you can use BankScrap in IRB:
+
+```bash
+irb -I lib/ -r 'bankscrap'
+```
+
+Then use your bank adapter:
+
+```ruby
+require 'bankscrap-ing'
+ing = Bankscrap::ING::Bank.new(
+  dni: YOUR_DNI,
+  password: YOUR_ING_PASSWORD,
+  birthday: "dd/mm/yyyy"
+)
+
+ing.accounts
+ing.accounts.first.balance
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Fetching Data" icon="download" href="/library/fetching-data">
+    Learn how to fetch transactions and other data
+  </Card>
+  <Card title="Error Handling" icon="shield-exclamation" href="/library/error-handling">
+    Handle exceptions and errors properly
+  </Card>
+</CardGroup>

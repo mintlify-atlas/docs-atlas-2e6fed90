@@ -1,0 +1,396 @@
+---
+title: 'Contributing Guidelines'
+description: 'How to contribute your adapter to the BankScrap community'
+---
+
+Contributing your adapter helps the BankScrap community grow and gives others access to their bank data.
+
+## Before You Start
+
+<Steps>
+  <Step title="Check if adapter exists">
+    Search the [BankScrap organization](https://github.com/bankscrap) to see if someone has already created an adapter for your bank.
+  </Step>
+
+  <Step title="Review existing adapters">
+    Look at successful adapters for reference:
+    - [bankscrap-bbva](https://github.com/bankscrap/bankscrap-bbva)
+    - [bankscrap-ing](https://github.com/bankscrap/bankscrap-ing)
+    - [bankscrap-openbank](https://github.com/bankscrap/bankscrap-openbank)
+  </Step>
+
+  <Step title="Verify terms of service">
+    Check your bank's terms of service to ensure you're not violating any agreements.
+  </Step>
+</Steps>
+
+## Creating Your Adapter
+
+### Generate the Project
+
+```bash
+gem install bankscrap
+bankscrap generate_adapter YourBankName
+cd bankscrap-your-bank-name
+git init
+git add .
+git commit -m "Initial commit from generator"
+```
+
+### Implement Required Methods
+
+Implement the three core methods:
+
+1. **login** - Authentication logic
+2. **fetch_accounts** - Retrieve accounts
+3. **fetch_transactions_for** - Get transactions
+
+Optionally implement:
+- **fetch_loans** - Retrieve loans
+- **fetch_cards** - Retrieve credit cards
+- **fetch_investments** - Retrieve investments
+
+### Update Documentation
+
+Update the generated `README.md`:
+
+```markdown README.md
+# Bankscrap::YourBankName
+
+[Bankscrap](https://github.com/bankscrap/bankscrap) adapter for Your Bank Name.
+
+## Installation
+
+Add this line to your application's Gemfile:
+
+```ruby
+gem 'bankscrap-your-bank-name'
+```
+
+Or install it yourself:
+
+```bash
+gem install bankscrap-your-bank-name
+```
+
+## Usage
+
+### From terminal
+
+```bash
+bankscrap balance YourBankName --credentials=user:YOUR_USER password:YOUR_PASSWORD
+```
+
+### From Ruby code
+
+```ruby
+require 'bankscrap-your-bank-name'
+
+bank = Bankscrap::YourBankName::Bank.new(
+  user: 'YOUR_USER',
+  password: 'YOUR_PASSWORD'
+)
+
+# Get accounts
+bank.accounts.each do |account|
+  puts account.name
+  puts account.balance
+end
+
+# Get transactions
+account = bank.accounts.first
+transactions = account.fetch_transactions(
+  start_date: Date.today - 1.month,
+  end_date: Date.today
+)
+```
+
+## Development
+
+After checking out the repo, run:
+
+```bash
+bundle install
+```
+
+To run tests:
+
+```bash
+bundle exec rspec
+```
+
+## Contributing
+
+1. Fork it
+2. Create your feature branch (`git checkout -b my-new-feature`)
+3. Commit your changes (`git commit -am 'Add some feature'`)
+4. Push to the branch (`git push origin my-new-feature`)
+5. Create a new Pull Request
+
+## License
+
+The gem is available as open source under the terms of the [MIT License](LICENSE.txt).
+```
+
+### Update Gemspec
+
+Fill in your information:
+
+```ruby bankscrap-your-bank-name.gemspec
+Gem::Specification.new do |spec|
+  spec.name          = 'bankscrap-your-bank-name'
+  spec.version       = Bankscrap::YourBankName::VERSION
+  spec.authors       = ['Your Name']
+  spec.email         = ['your.email@example.com']
+  spec.summary       = 'Bankscrap adapter for Your Bank Name'
+  spec.description   = 'Bankscrap adapter for Your Bank Name online banking'
+  spec.homepage      = 'https://github.com/bankscrap/bankscrap-your-bank-name'
+  spec.license       = 'MIT'
+
+  spec.files         = `git ls-files -z`.split("\x0")
+  spec.require_paths = ['lib']
+
+  spec.add_runtime_dependency 'bankscrap', '~> 2.0'
+  
+  spec.add_development_dependency 'bundler'
+  spec.add_development_dependency 'rake'
+  spec.add_development_dependency 'rspec', '~> 3.0'
+  spec.add_development_dependency 'webmock', '~> 3.0'
+  spec.add_development_dependency 'vcr', '~> 6.0'
+end
+```
+
+## Testing Your Adapter
+
+### Write Tests
+
+Add comprehensive tests:
+
+```ruby spec/bank_spec.rb
+require 'spec_helper'
+
+describe Bankscrap::YourBankName::Bank do
+  let(:credentials) { { user: 'test', password: 'test' } }
+
+  describe '#initialize', :vcr do
+    it 'successfully logs in with valid credentials' do
+      bank = described_class.new(credentials)
+      expect(bank.accounts).to be_an(Array)
+    end
+  end
+
+  describe '#fetch_accounts', :vcr do
+    it 'returns account objects' do
+      bank = described_class.new(credentials)
+      expect(bank.accounts.first).to be_a(Bankscrap::Account)
+    end
+  end
+
+  describe '#fetch_transactions_for', :vcr do
+    it 'returns transaction objects' do
+      bank = described_class.new(credentials)
+      account = bank.accounts.first
+      transactions = bank.fetch_transactions_for(account)
+      expect(transactions.first).to be_a(Bankscrap::Transaction)
+    end
+  end
+end
+```
+
+### Manual Testing
+
+Test with real credentials:
+
+```bash
+export BANKSCRAP_YOUR_BANK_NAME_USER=your_user
+export BANKSCRAP_YOUR_BANK_NAME_PASSWORD=your_password
+bundle exec bankscrap balance YourBankName
+```
+
+## Publishing Your Adapter
+
+<Steps>
+  <Step title="Create GitHub repository">
+    Create a new repository on GitHub:
+
+    ```bash
+    git remote add origin https://github.com/yourusername/bankscrap-your-bank-name.git
+    git push -u origin main
+    ```
+  </Step>
+
+  <Step title="Add badges">
+    Add status badges to your README:
+
+    ```markdown
+    [![Gem Version](https://badge.fury.io/rb/bankscrap-your-bank-name.svg)](https://rubygems.org/gems/bankscrap-your-bank-name)
+    [![Build Status](https://github.com/yourusername/bankscrap-your-bank-name/workflows/Tests/badge.svg)](https://github.com/yourusername/bankscrap-your-bank-name/actions)
+    ```
+  </Step>
+
+  <Step title="Publish to RubyGems">
+    Build and publish your gem:
+
+    ```bash
+    gem build bankscrap-your-bank-name.gemspec
+    gem push bankscrap-your-bank-name-1.0.0.gem
+    ```
+  </Step>
+
+  <Step title="Notify the community">
+    Open an issue on the [main BankScrap repository](https://github.com/bankscrap/bankscrap/issues) to announce your adapter.
+  </Step>
+
+  <Step title="Request to join organization">
+    If you want to transfer your adapter to the BankScrap organization, mention it in your announcement issue.
+  </Step>
+</Steps>
+
+## Code Quality Standards
+
+### Follow Ruby Style Guide
+
+Use consistent Ruby style:
+
+- Use 2 spaces for indentation
+- Use snake_case for methods and variables
+- Use SCREAMING_SNAKE_CASE for constants
+- Keep lines under 120 characters
+- Add comments for complex logic
+
+### Error Handling
+
+Provide helpful error messages:
+
+```ruby
+def login
+  response = post(LOGIN_ENDPOINT, fields: { user: @user, password: @password }.to_json)
+  json = JSON.parse(response)
+  
+  case json['error_code']
+  when 'INVALID_CREDENTIALS'
+    raise 'Invalid username or password'
+  when 'ACCOUNT_LOCKED'
+    raise 'Account locked. Contact your bank.'
+  when 'MAINTENANCE'
+    raise 'Bank is under maintenance. Try again later.'
+  else
+    raise 'Login failed' unless json['success']
+  end
+rescue JSON::ParserError
+  raise 'Invalid response from bank'
+end
+```
+
+### Security
+
+<Warning>
+Never commit sensitive data like credentials, tokens, or personal information.
+</Warning>
+
+- Use `.gitignore` for sensitive files
+- Filter credentials in VCR cassettes
+- Don't log passwords or tokens
+- Use environment variables for secrets
+
+### Documentation
+
+Document your code:
+
+```ruby
+# Fetches all transactions for the given account within the date range.
+#
+# @param account [Bankscrap::Account] The account to fetch transactions for
+# @param start_date [Date] The start date for transactions (default: 1 month ago)
+# @param end_date [Date] The end date for transactions (default: today)
+# @return [Array<Bankscrap::Transaction>] Array of transaction objects
+#
+def fetch_transactions_for(account, start_date: Date.today - 1.month, end_date: Date.today)
+  # Implementation
+end
+```
+
+## Maintenance
+
+### Keep Dependencies Updated
+
+Regularly update dependencies:
+
+```bash
+bundle update
+```
+
+### Respond to Issues
+
+Monitor and respond to GitHub issues from users.
+
+### Update for Bank Changes
+
+Banks frequently change their APIs and websites. When this happens:
+
+1. Update your adapter code
+2. Update tests and VCR cassettes
+3. Bump the version number
+4. Release a new gem version
+
+### Version Numbering
+
+Follow [Semantic Versioning](https://semver.org/):
+
+- **Major** (1.0.0): Breaking changes
+- **Minor** (0.1.0): New features, backward compatible
+- **Patch** (0.0.1): Bug fixes, backward compatible
+
+## Getting Help
+
+If you need help:
+
+- Check the [main BankScrap repository](https://github.com/bankscrap/bankscrap)
+- Look at [existing adapters](https://github.com/bankscrap) for examples
+- Open an issue on GitHub
+- Contact: bankscrap@protonmail.com
+
+## License
+
+All BankScrap adapters should use the MIT License for consistency:
+
+```
+MIT License
+
+Copyright (c) [year] [your name]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## Checklist Before Publishing
+
+- [ ] All required methods implemented
+- [ ] Tests written and passing
+- [ ] Manually tested with real credentials
+- [ ] README.md updated with usage examples
+- [ ] Gemspec filled out completely
+- [ ] VCR cassettes reviewed for sensitive data
+- [ ] GitHub repository created
+- [ ] CI/CD set up (GitHub Actions)
+- [ ] Gem published to RubyGems
+- [ ] Announced on BankScrap main repository
+
+<Note>
+Thank you for contributing to BankScrap! Your adapter helps others access their financial data programmatically.
+</Note>

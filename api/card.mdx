@@ -1,0 +1,214 @@
+---
+title: 'Bankscrap::Card'
+description: 'Represents a bank card'
+---
+
+## Overview
+
+The `Bankscrap::Card` class represents a bank card (debit or credit card) with its balance and details.
+
+## Attributes
+
+<ResponseField name="bank" type="Bankscrap::Bank">
+  Reference to the bank instance that owns this card
+</ResponseField>
+
+<ResponseField name="id" type="String">
+  Card identifier
+</ResponseField>
+
+<ResponseField name="name" type="String">
+  Card name or label
+</ResponseField>
+
+<ResponseField name="pan" type="String">
+  Primary Account Number (card number, usually masked)
+</ResponseField>
+
+<ResponseField name="amount" type="Money" required>
+  Current balance or total amount on the card (must be a Money object)
+</ResponseField>
+
+<ResponseField name="avaliable" type="Money" required>
+  Available balance or credit (must be a Money object)
+  
+  Note: The attribute name contains a typo ("avaliable" instead of "available") which is preserved from the source code.
+</ResponseField>
+
+<ResponseField name="is_credit" type="Boolean">
+  Whether this is a credit card (true) or debit card (false)
+</ResponseField>
+
+<ResponseField name="description" type="String">
+  Human-readable card description
+</ResponseField>
+
+<ResponseField name="raw_data" type="Hash">
+  Raw data from the bank's API response
+</ResponseField>
+
+## Methods
+
+### initialize(params = {})
+
+Creates a new card instance.
+
+<ParamField path="params" type="Hash" default="{}">
+  Card attributes
+  
+  <Expandable title="properties">
+    <ParamField path="bank" type="Bankscrap::Bank">
+      Bank instance reference
+    </ParamField>
+    
+    <ParamField path="id" type="String">
+      Card identifier
+    </ParamField>
+    
+    <ParamField path="name" type="String">
+      Card name
+    </ParamField>
+    
+    <ParamField path="pan" type="String">
+      Primary Account Number
+    </ParamField>
+    
+    <ParamField path="amount" type="Money" required>
+      Card balance (must be Money object)
+    </ParamField>
+    
+    <ParamField path="avaliable" type="Money" required>
+      Available balance (must be Money object)
+    </ParamField>
+    
+    <ParamField path="is_credit" type="Boolean">
+      Credit card flag
+    </ParamField>
+    
+    <ParamField path="description" type="String">
+      Card description
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Raises:**
+- `NotMoneyObjectError` - If amount or avaliable is not a Money object
+
+**Example:**
+
+```ruby
+card = Bankscrap::Card.new(
+  bank: bank,
+  id: 'CARD123',
+  name: 'Visa Gold',
+  pan: '**** **** **** 1234',
+  amount: Money.new(150000, 'EUR'),     # 1,500.00 EUR used
+  avaliable: Money.new(350000, 'EUR'),  # 3,500.00 EUR available
+  is_credit: true,
+  description: 'Visa Gold Credit Card'
+)
+```
+
+### currency
+
+Returns the currency of the card amount.
+
+**Returns:** `Money::Currency`
+
+**Example:**
+
+```ruby
+puts card.currency.iso_code # => "EUR"
+```
+
+### to_s
+
+Returns the string representation of the card (description).
+
+**Returns:** `String`
+
+### to_a
+
+Converts card to array format for CSV export.
+
+**Returns:** `Array` - `[id, name, description, pan, amount, avaliable, is_credit]`
+
+**Example:**
+
+```ruby
+card.to_a
+# => ["CARD123", "Visa Gold", "Visa Gold Credit Card", "**** **** **** 1234", #<Money ...>, #<Money ...>, true]
+```
+
+## Usage Examples
+
+### Accessing Cards
+
+```ruby
+# Initialize bank and get cards
+bank = Bankscrap::MyBank.new(user: 'username', password: 'password')
+
+# Check if bank supports cards
+if bank.cards
+  bank.cards.each do |card|
+    puts "Card: #{card.name}"
+    puts "PAN: #{card.pan}"
+    puts "Type: #{card.is_credit ? 'Credit' : 'Debit'}"
+    puts "Balance: #{card.amount.format}"
+    puts "Available: #{card.avaliable.format}"
+    puts ""
+  end
+else
+  puts "This bank adapter does not support cards"
+end
+```
+
+### Filtering Cards by Type
+
+```ruby
+# Get only credit cards
+credit_cards = bank.cards.select { |card| card.is_credit }
+
+# Get only debit cards
+debit_cards = bank.cards.reject { |card| card.is_credit }
+
+puts "Credit cards: #{credit_cards.count}"
+puts "Debit cards: #{debit_cards.count}"
+```
+
+### Calculating Total Available Credit
+
+```ruby
+# Calculate total available credit across all credit cards
+total_available = bank.cards
+  .select { |card| card.is_credit }
+  .sum { |card| card.avaliable.cents }
+
+puts "Total available credit: #{Money.new(total_available, 'EUR').format}"
+```
+
+### Exporting Cards
+
+```ruby
+# Export cards to CSV
+exporter = BankScrap::Exporter::Csv.new(nil)
+exporter.write_to_file(bank.cards, 'cards.csv')
+
+# Export cards to JSON
+exporter = BankScrap::Exporter::Json.new(nil)
+exporter.write_to_file(bank.cards, 'cards.json')
+```
+
+## Bank Adapter Support
+
+Not all bank adapters support fetching cards. To check if a bank supports cards:
+
+```ruby
+bank = Bankscrap::MyBank.new(user: 'username', password: 'password')
+
+if bank.respond_to?(:fetch_cards)
+  puts "This bank supports card fetching"
+else
+  puts "This bank does not support card fetching"
+end
+```

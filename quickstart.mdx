@@ -1,80 +1,355 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Get started with BankScrap in minutes - fetch your account balance and transactions using the CLI or Ruby library
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
+Before you begin, make sure you have:
 
-### Step 1: Set up your local environment
+- Installed BankScrap and your bank's adapter ([Installation Guide](/installation))
+- Your bank login credentials ready
+- Ruby 2.1 or higher installed
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+## CLI Usage
 
-### Step 2: Deploy your changes
+BankScrap provides a powerful command-line interface for quick access to your banking data.
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+### Fetch Account Balance
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+The simplest way to get started is to fetch your account balance:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+<CodeGroup>
 
-### Step 3: Go live
+```bash BBVA
+bankscrap balance BBVA --credentials=user:YOUR_BANK_USER password:YOUR_BANK_PASSWORD
+```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+```bash ING Direct
+bankscrap balance ING --credentials=dni:YOUR_DNI password:YOUR_BANK_PASSWORD birthday:01/01/1980
+```
 
-## Next steps
+```bash Openbank
+bankscrap balance Openbank --credentials=user:YOUR_BANK_USER password:YOUR_BANK_PASSWORD
+```
 
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+</CodeGroup>
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  ING Direct requires an additional parameter: your birthday in DD/MM/YYYY format.
 </Note>
+
+**Example output:**
+
+```
+Account: Main Account (ES12 3456 7890 1234 5678 9012)
+Balance: €1,234.56
+Available: €1,200.00
+```
+
+### Fetch Transactions
+
+Get transactions for the last 30 days:
+
+<CodeGroup>
+
+```bash BBVA
+bankscrap transactions BBVA --credentials=user:YOUR_BANK_USER password:YOUR_BANK_PASSWORD
+```
+
+```bash ING Direct
+bankscrap transactions ING --credentials=dni:YOUR_DNI password:YOUR_BANK_PASSWORD birthday:01/01/1980
+```
+
+</CodeGroup>
+
+### Fetch Transactions with Date Range
+
+Specify a custom date range for transactions:
+
+```bash
+bankscrap transactions BBVA \
+  --credentials=user:YOUR_BANK_USER password:YOUR_BANK_PASSWORD \
+  --from 01-01-2024 --to 31-01-2024
+```
+
+<Tip>
+  Date format must be DD-MM-YYYY (e.g., 31-12-2024)
+</Tip>
+
+### Specify an Account
+
+By default, BankScrap uses your first account. To fetch data for a specific account, use the `--iban` flag:
+
+```bash
+bankscrap transactions BBVA \
+  --iban "ES12 3456 7890 1234 5678 9012" \
+  --credentials=user:YOUR_BANK_USER password:YOUR_BANK_PASSWORD
+```
+
+### Export to CSV
+
+Export transactions to a CSV file for further analysis:
+
+```bash
+bankscrap transactions BBVA \
+  --credentials=user:YOUR_BANK_USER password:YOUR_BANK_PASSWORD \
+  --format CSV \
+  --output ./my_transactions.csv
+```
+
+<Note>
+  The `--output` parameter is optional. If not specified, transactions are saved to `transactions.csv` by default.
+</Note>
+
+### Environment Variables
+
+To avoid passing credentials every time, define them as environment variables:
+
+<Steps>
+  <Step title="Open your shell profile">
+    Edit your `.bash_profile`, `.zshrc`, or equivalent file:
+    ```bash
+    nano ~/.bash_profile
+    ```
+  </Step>
+  
+  <Step title="Add credentials">
+    Add your bank credentials using this format:
+    ```bash
+    export BANKSCRAP_[BANK_NAME]_USER=YOUR_BANK_USER
+    export BANKSCRAP_[BANK_NAME]_PASSWORD=YOUR_BANK_PASSWORD
+    export BANKSCRAP_[BANK_NAME]_ANY_OTHER_CREDENTIAL=VALUE
+    ```
+    
+    For example, for BBVA Net Cash:
+    ```bash
+    export BANKSCRAP_BBVA_NET_CASH_USER=my_username
+    export BANKSCRAP_BBVA_NET_CASH_PASSWORD=my_password
+    ```
+  </Step>
+  
+  <Step title="Reload your profile">
+    ```bash
+    source ~/.bash_profile
+    ```
+  </Step>
+  
+  <Step title="Run commands without credentials">
+    Now you can run commands without passing credentials:
+    ```bash
+    bankscrap balance BBVA
+    ```
+  </Step>
+</Steps>
+
+## Library Usage
+
+Use BankScrap as a Ruby library to integrate banking data into your applications.
+
+### Basic Setup
+
+First, require the bank adapter and initialize a bank object:
+
+<CodeGroup>
+
+```ruby BBVA
+require 'bankscrap-bbva'
+
+bbva = Bankscrap::BBVA::Bank.new(
+  user: 'YOUR_BBVA_USER',
+  password: 'YOUR_BBVA_PASSWORD'
+)
+```
+
+```ruby ING Direct
+require 'bankscrap-ing'
+
+ing = Bankscrap::ING::Bank.new(
+  dni: 'YOUR_DNI',
+  password: 'YOUR_ING_PASSWORD',
+  birthday: '01/01/1980'
+)
+```
+
+```ruby Openbank
+require 'bankscrap-openbank'
+
+openbank = Bankscrap::Openbank::Bank.new(
+  user: 'YOUR_USER',
+  password: 'YOUR_PASSWORD'
+)
+```
+
+</CodeGroup>
+
+<Note>
+  The `new` method automatically logs in and fetches your bank accounts.
+</Note>
+
+### Access Accounts
+
+Retrieve all your accounts:
+
+```ruby
+bank.accounts
+# => [#<Bankscrap::Account>, #<Bankscrap::Account>]
+```
+
+### Get Account Balance
+
+Access the balance of a specific account:
+
+```ruby
+account = bank.accounts.first
+puts account.balance
+# => #<Money fractional:123456 currency:EUR>
+
+puts account.balance.format
+# => "€1,234.56"
+```
+
+### Fetch Transactions
+
+Get transactions for the last month (default):
+
+```ruby
+account = bank.accounts.first
+transactions = account.transactions
+
+transactions.each do |transaction|
+  puts "#{transaction.effective_date}: #{transaction.description} - #{transaction.amount.format}"
+end
+```
+
+### Fetch Transactions with Date Range
+
+Retrieve transactions for a specific date range:
+
+```ruby
+account = bank.accounts.first
+
+# Get last year's transactions
+transactions = account.fetch_transactions(
+  start_date: Date.today - 1.year,
+  end_date: Date.today
+)
+
+account.transactions = transactions
+```
+
+### Complete Example
+
+Here's a complete example that fetches and displays account information:
+
+```ruby
+require 'bankscrap-bbva'
+
+# Initialize the bank client
+bbva = Bankscrap::BBVA::Bank.new(
+  user: ENV['BANK_USER'],
+  password: ENV['BANK_PASSWORD']
+)
+
+# Display all accounts and balances
+bbva.accounts.each do |account|
+  puts "Account: #{account.description}"
+  puts "IBAN: #{account.iban}"
+  puts "Balance: #{account.balance.format}"
+  puts "Available: #{account.available_balance.format}"
+  puts "-" * 50
+end
+
+# Fetch transactions for the first account
+account = bbva.accounts.first
+transactions = account.fetch_transactions(
+  start_date: Date.today - 1.month,
+  end_date: Date.today
+)
+
+puts "\nRecent Transactions:"
+transactions.first(10).each do |transaction|
+  puts "#{transaction.effective_date.strftime('%Y-%m-%d')}: #{transaction.description} - #{transaction.amount.format}"
+end
+```
+
+## Interactive Development with IRB
+
+For development and testing, you can use IRB (Interactive Ruby) to explore BankScrap:
+
+<Steps>
+  <Step title="Start IRB with BankScrap">
+    Launch IRB with the BankScrap library loaded:
+    ```bash
+    irb -I lib/ -r 'bankscrap'
+    ```
+  </Step>
+  
+  <Step title="Require your bank adapter">
+    ```ruby
+    require 'bankscrap-ing'
+    ```
+  </Step>
+  
+  <Step title="Initialize and explore">
+    ```ruby
+    ing = Bankscrap::ING::Bank.new(
+      dni: 'YOUR_DNI',
+      password: 'YOUR_PASSWORD',
+      birthday: '01/01/1980'
+    )
+    
+    # Explore your accounts
+    ing.accounts
+    ing.accounts.first.balance
+    ing.accounts.first.transactions
+    ```
+  </Step>
+</Steps>
+
+## Common CLI Commands
+
+Here's a quick reference of common BankScrap commands:
+
+| Command | Description |
+|---------|-------------|
+| `bankscrap balance BANK --credentials=...` | Get account balances |
+| `bankscrap transactions BANK --credentials=...` | Get last 30 days of transactions |
+| `bankscrap transactions BANK --from DATE --to DATE` | Get transactions for date range |
+| `bankscrap transactions BANK --iban IBAN` | Get transactions for specific account |
+| `bankscrap transactions BANK --format CSV` | Export transactions to CSV |
+| `bankscrap cards BANK --credentials=...` | Get credit cards information |
+| `bankscrap loans BANK --credentials=...` | Get loans information |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="CLI Reference"
+    icon="terminal"
+    href="/cli/commands"
+  >
+    Explore all available CLI commands and options
+  </Card>
+  <Card
+    title="API Reference"
+    icon="code"
+    href="/api/bank"
+  >
+    Learn about the complete Ruby API
+  </Card>
+  <Card
+    title="Create Bank Adapter"
+    icon="puzzle-piece"
+    href="/adapters/generator"
+  >
+    Build your own adapter for unsupported banks
+  </Card>
+  <Card
+    title="Library Usage"
+    icon="book"
+    href="/library/ruby-api"
+  >
+    Learn how to use BankScrap in your Ruby applications
+  </Card>
+</CardGroup>

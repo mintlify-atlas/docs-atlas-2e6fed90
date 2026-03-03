@@ -1,0 +1,206 @@
+---
+title: 'Bankscrap::Account'
+description: 'Represents a bank account'
+---
+
+## Overview
+
+The `Bankscrap::Account` class represents a bank account with its balance, transactions, and identifying information.
+
+## Attributes
+
+<ResponseField name="bank" type="Bankscrap::Bank">
+  Reference to the bank instance that owns this account
+</ResponseField>
+
+<ResponseField name="id" type="String">
+  Internal account identifier
+</ResponseField>
+
+<ResponseField name="name" type="String">
+  Account name or label
+</ResponseField>
+
+<ResponseField name="balance" type="Money" required>
+  Current account balance (must be a Money object)
+</ResponseField>
+
+<ResponseField name="available_balance" type="Money" required>
+  Available balance for spending (must be a Money object)
+</ResponseField>
+
+<ResponseField name="description" type="String">
+  Human-readable account description
+</ResponseField>
+
+<ResponseField name="transactions" type="Array<Bankscrap::Transaction>">
+  List of transactions for this account
+</ResponseField>
+
+<ResponseField name="iban" type="String">
+  International Bank Account Number
+</ResponseField>
+
+<ResponseField name="bic" type="String">
+  Bank Identifier Code (SWIFT code)
+</ResponseField>
+
+<ResponseField name="raw_data" type="Hash">
+  Raw data from the bank's API response
+</ResponseField>
+
+## Methods
+
+### initialize(params = {})
+
+Creates a new account instance.
+
+<ParamField path="params" type="Hash" default="{}">
+  Account attributes
+  
+  <Expandable title="properties">
+    <ParamField path="bank" type="Bankscrap::Bank">
+      Bank instance reference
+    </ParamField>
+    
+    <ParamField path="id" type="String">
+      Account identifier
+    </ParamField>
+    
+    <ParamField path="name" type="String">
+      Account name
+    </ParamField>
+    
+    <ParamField path="balance" type="Money" required>
+      Account balance (must be Money object)
+    </ParamField>
+    
+    <ParamField path="available_balance" type="Money" required>
+      Available balance (must be Money object)
+    </ParamField>
+    
+    <ParamField path="description" type="String">
+      Account description
+    </ParamField>
+    
+    <ParamField path="iban" type="String">
+      IBAN number
+    </ParamField>
+    
+    <ParamField path="bic" type="String">
+      BIC/SWIFT code
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Raises:**
+- `NotMoneyObjectError` - If balance or available_balance is not a Money object
+
+**Example:**
+
+```ruby
+account = Bankscrap::Account.new(
+  bank: bank,
+  id: '1234567890',
+  name: 'Main Account',
+  balance: Money.new(100000, 'EUR'),
+  available_balance: Money.new(95000, 'EUR'),
+  description: 'Personal Checking Account',
+  iban: 'ES1234567890123456789012',
+  bic: 'BANKESMMXXX'
+)
+```
+
+### transactions
+
+Returns transactions for this account. If not already loaded, fetches them from the bank.
+
+**Returns:** `Array<Bankscrap::Transaction>`
+
+**Example:**
+
+```ruby
+account.transactions.each do |transaction|
+  puts "#{transaction.effective_date}: #{transaction.description} - #{transaction.amount}"
+end
+```
+
+### fetch_transactions(start_date: Date.today - 2.years, end_date: Date.today)
+
+Fetches transactions for a specific date range.
+
+<ParamField path="start_date" type="Date" default="Date.today - 2.years">
+  Start date for transaction range
+</ParamField>
+
+<ParamField path="end_date" type="Date" default="Date.today">
+  End date for transaction range
+</ParamField>
+
+**Returns:** `Array<Bankscrap::Transaction>`
+
+**Example:**
+
+```ruby
+# Get transactions for the last 30 days
+transactions = account.fetch_transactions(
+  start_date: Date.today - 30,
+  end_date: Date.today
+)
+```
+
+### currency
+
+Returns the currency of the account balance.
+
+**Returns:** `Money::Currency`
+
+**Example:**
+
+```ruby
+puts account.currency.iso_code # => "EUR"
+```
+
+### to_s
+
+Returns the string representation of the account (description).
+
+**Returns:** `String`
+
+### to_a
+
+Converts account to array format for CSV export.
+
+**Returns:** `Array` - `[id, iban, name, description, balance]`
+
+**Example:**
+
+```ruby
+account.to_a
+# => ["1234567890", "ES1234567890123456789012", "Main Account", "Personal Checking Account", #<Money ...>]
+```
+
+## Usage Example
+
+```ruby
+# Initialize bank and get accounts
+bank = Bankscrap::MyBank.new(user: 'username', password: 'password')
+
+# Access accounts
+bank.accounts.each do |account|
+  puts "Account: #{account.name}"
+  puts "IBAN: #{account.iban}"
+  puts "Balance: #{account.balance.format}"
+  puts "Available: #{account.available_balance.format}"
+  puts ""
+end
+
+# Find specific account
+account = bank.account_with_iban('ES1234567890123456789012')
+
+# Get recent transactions
+transactions = account.fetch_transactions(
+  start_date: Date.today - 90,
+  end_date: Date.today
+)
+```
