@@ -1,0 +1,139 @@
+{
+  "projectType": "framework",
+  "projectName": "BankScrap",
+  "projectDescription": "Ruby framework to extract balance and transactions from multiple banks through a unified adapter system.",
+  "theme": "aspen",
+  "primaryColor": "#00A86B",
+  "lightColor": "#34C759",
+  "darkColor": "#00875A",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/adapters",
+              "concepts/bank-class",
+              "concepts/models"
+            ]
+          },
+          {
+            "group": "CLI Usage",
+            "pages": [
+              "cli/commands",
+              "cli/configuration",
+              "cli/export"
+            ]
+          },
+          {
+            "group": "Library Usage",
+            "pages": [
+              "library/ruby-api",
+              "library/fetching-data",
+              "library/error-handling"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/supported-banks",
+              "guides/environment-variables"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Classes",
+            "pages": [
+              "api/bank",
+              "api/account",
+              "api/transaction",
+              "api/card",
+              "api/loan",
+              "api/investment"
+            ]
+          },
+          {
+            "group": "Exporters",
+            "pages": [
+              "api/csv-exporter",
+              "api/json-exporter"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "api/config-options"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Building Adapters",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "adapters/generator",
+              "adapters/structure",
+              "adapters/implementation"
+            ]
+          },
+          {
+            "group": "Advanced Topics",
+            "pages": [
+              "adapters/authentication",
+              "adapters/web-scraping",
+              "adapters/api-reverse-engineering"
+            ]
+          },
+          {
+            "group": "Testing & Contributing",
+            "pages": [
+              "adapters/testing",
+              "adapters/contributing"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Unified interface for multiple bank integrations",
+    "CLI tool for checking balances and fetching transactions",
+    "Ruby library API for programmatic access",
+    "Adapter generator for creating new bank integrations",
+    "Support for accounts, cards, loans, and investments",
+    "CSV and JSON export capabilities",
+    "Web scraping and API reverse engineering support"
+  ],
+  "publicApiSurface": [
+    "Bankscrap::Bank - Base class for bank adapters",
+    "Bankscrap::Account - Bank account representation",
+    "Bankscrap::Transaction - Transaction model",
+    "Bankscrap::Card - Credit card model",
+    "Bankscrap::Loan - Loan model",
+    "Bankscrap::Investment - Investment model",
+    "BankScrap::Exporter::Csv - CSV exporter",
+    "BankScrap::Exporter::Json - JSON exporter",
+    "bankscrap balance - CLI command to fetch account balances",
+    "bankscrap transactions - CLI command to fetch transactions",
+    "bankscrap cards - CLI command to fetch credit cards",
+    "bankscrap loans - CLI command to fetch loans",
+    "bankscrap generate_adapter - CLI command to scaffold new adapters"
+  ]
+}
