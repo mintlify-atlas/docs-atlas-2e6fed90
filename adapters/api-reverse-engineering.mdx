@@ -451,8 +451,15 @@ end
 
 Test your API implementation:
 
-```ruby
+```bash
 # Use curl to verify endpoints
+curl -X POST https://api.bank.com/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"test","password":"test"}'
+```
+
+```ruby
+# Test in Ruby
 system(<<~CURL)
   curl -X POST https://api.bank.com/login \
     -H 'Content-Type: application/json' \
